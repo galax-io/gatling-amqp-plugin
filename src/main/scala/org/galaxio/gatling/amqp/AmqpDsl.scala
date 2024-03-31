@@ -1,13 +1,17 @@
 package org.galaxio.gatling.amqp
 
 import com.rabbitmq.client.{BuiltinExchangeType, ConnectionFactory}
-import org.galaxio.gatling.amqp.protocol.{AmqpProtocol, AmqpProtocolBuilder, AmqpProtocolBuilderBase, RabbitMQConnectionFactoryBuilder}
+import org.galaxio.gatling.amqp.protocol._
 import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.session.Expression
-import org.galaxio.gatling.amqp.protocol._
 import org.galaxio.gatling.amqp.checks.AmqpCheckSupport
-import org.galaxio.gatling.amqp.protocol.{AmqpProtocol, AmqpProtocolBuilder, AmqpProtocolBuilderBase, RabbitMQConnectionFactoryBuilder}
+import org.galaxio.gatling.amqp.protocol.{
+  AmqpProtocol,
+  AmqpProtocolBuilder,
+  AmqpProtocolBuilderBase,
+  RabbitMQConnectionFactoryBuilder,
+}
 import org.galaxio.gatling.amqp.request.{AmqpDslBuilderBase, PublishDslBuilder, RequestReplyDslBuilder}
 
 trait AmqpDsl extends AmqpCheckSupport {
