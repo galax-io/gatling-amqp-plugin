@@ -33,7 +33,7 @@ jobs:
           java-version: openjdk@1.17
 
       - name: Test Release
-        run: sbt clean scalafmtCheckAll scalafmtSbtCheck compile coverage "Gatling / testOnly io.cosmospf.gatling.amqp.examples.AmqpGatlingTest" test coverageOff
+        run: sbt clean scalafmtCheckAll scalafmtSbtCheck compile coverage "Gatling / testOnly org.galaxio.gatling.amqp.examples.AmqpGatlingTest" test coverageOff
 
       - name: Coverage Report
         run: sbt coverageReport
