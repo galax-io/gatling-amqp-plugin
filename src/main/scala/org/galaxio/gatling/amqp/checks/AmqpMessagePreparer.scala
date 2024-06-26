@@ -41,7 +41,7 @@ object AmqpMessagePreparer {
       messageCharset(configuration, msg)
         .flatMap(bodyCharset =>
           if (msg.payload.length > CharsParsingThreshold)
-            jsonParsers.safeParse(new ByteArrayInputStream(msg.payload), bodyCharset)
+            jsonParsers.safeParse(new ByteArrayInputStream(msg.payload))
           else
             jsonParsers.safeParse(new String(msg.payload, bodyCharset)),
         )

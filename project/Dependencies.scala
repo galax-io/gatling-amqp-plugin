@@ -1,7 +1,7 @@
 import sbt.*
 
 object Dependencies {
-  val gatlingVersion = "3.10.5"
+  val gatlingVersion = "3.11.4"
 
   lazy val gatlingCore: Seq[ModuleID] = Seq(
     "io.gatling" % "gatling-core"      % gatlingVersion % Provided,
