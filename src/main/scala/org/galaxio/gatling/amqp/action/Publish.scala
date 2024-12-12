@@ -3,6 +3,7 @@ package org.galaxio.gatling.amqp.action
 import io.gatling.commons.stats.{KO, OK}
 import io.gatling.commons.util.Clock
 import io.gatling.core.action.Action
+import io.gatling.core.actor.ActorRef
 import io.gatling.core.controller.throttle.Throttler
 import io.gatling.core.session.{Expression, Session}
 import io.gatling.core.stats.StatsEngine
@@ -16,7 +17,7 @@ class Publish(
     val statsEngine: StatsEngine,
     val clock: Clock,
     val next: Action,
-    throttler: Option[Throttler],
+    throttler: Option[ActorRef[Throttler.Command]],
 ) extends AmqpAction(attributes, components, throttler) {
   override val name: String = genName("amqpPublish")
 

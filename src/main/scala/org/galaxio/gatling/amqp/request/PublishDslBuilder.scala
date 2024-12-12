@@ -2,7 +2,7 @@ package org.galaxio.gatling.amqp.request
 
 import java.util.Date
 
-import com.softwaremill.quicklens._
+import io.gatling.internal.quicklens._
 import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.session.Expression
 

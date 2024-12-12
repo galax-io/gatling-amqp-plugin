@@ -6,7 +6,6 @@ import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
 import io.gatling.core.CoreComponents
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.protocol.{Protocol, ProtocolKey}
-import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters._
@@ -57,9 +56,8 @@ object AmqpProtocol {
             pool,
             components.actorSystem,
             components.statsEngine,
-            components.clock,
-            components.configuration,
-          ),
+            components.clock
+          )
         )
       }
       trackerPoolRef.get()

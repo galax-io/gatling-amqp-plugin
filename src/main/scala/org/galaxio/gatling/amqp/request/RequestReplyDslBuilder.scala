@@ -1,6 +1,6 @@
 package org.galaxio.gatling.amqp.request
 
-import com.softwaremill.quicklens._
+import io.gatling.internal.quicklens._
 import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.session.Expression
 import org.galaxio.gatling.amqp.AmqpCheck

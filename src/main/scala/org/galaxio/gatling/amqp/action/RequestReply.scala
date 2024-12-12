@@ -1,9 +1,10 @@
 package org.galaxio.gatling.amqp.action
 
-import io.gatling.commons.stats.{KO, OK}
+import io.gatling.commons.stats.KO
 import io.gatling.commons.util.Clock
 import io.gatling.commons.validation.Validation
 import io.gatling.core.action.Action
+import io.gatling.core.actor.ActorRef
 import io.gatling.core.controller.throttle.Throttler
 import io.gatling.core.session.Session
 import io.gatling.core.stats.StatsEngine
@@ -18,14 +19,14 @@ class RequestReply(
     val statsEngine: StatsEngine,
     val clock: Clock,
     val next: Action,
-    throttler: Option[Throttler],
+    throttler: Option[ActorRef[Throttler.Command]],
 ) extends AmqpAction(attributes, components, throttler) {
 
   private val replyTimeout = components.protocol.replyTimeout.getOrElse(0L)
 
   override val name: String = genName("amqpRequestReply")
 
-  def resolveDestination(dest: AmqpExchange, session: Session): Validation[String] =
+  private def resolveDestination(dest: AmqpExchange, session: Session): Validation[String] =
     dest match {
       case AmqpDirectExchange(name, _, _) => name(session)
       case AmqpQueueExchange(name, _)     => name(session)
@@ -60,7 +61,6 @@ class RequestReply(
           session,
           next,
           requestNameString,
-          attributes.silent,
         )
       } catch {
         case e: Throwable =>
