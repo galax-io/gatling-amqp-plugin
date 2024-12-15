@@ -16,7 +16,7 @@ class TrackerPool(
     pool: AmqpConnectionPool,
     system: ActorSystem,
     statsEngine: StatsEngine,
-    clock: Clock
+    clock: Clock,
 ) extends AmqpLogging with NameGen {
 
   private val trackers = new ConcurrentHashMap[String, AmqpMessageTracker]
@@ -57,6 +57,6 @@ class TrackerPool(
         }
 
         new AmqpMessageTracker(actor)
-      }
+      },
     )
 }

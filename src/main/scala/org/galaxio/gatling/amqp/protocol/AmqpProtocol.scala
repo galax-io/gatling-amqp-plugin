@@ -46,8 +46,8 @@ object AmqpProtocol {
             pool,
             components.actorSystem,
             components.statsEngine,
-            components.clock
-          )
+            components.clock,
+          ),
         )
       }
       trackerPoolRef.get()

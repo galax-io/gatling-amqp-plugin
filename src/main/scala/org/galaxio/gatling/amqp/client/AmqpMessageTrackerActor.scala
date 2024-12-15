@@ -38,10 +38,11 @@ object AmqpMessageTrackerActor {
   case object TimeoutScan extends AmqpMessage
 }
 
-class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clock) extends Actor[AmqpMessageTrackerActor.AmqpMessage](name) {
+class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clock)
+    extends Actor[AmqpMessageTrackerActor.AmqpMessage](name) {
 
-  private val sentMessages = mutable.HashMap.empty[String, MessagePublished]
-  private val timedOutMessages = mutable.ArrayBuffer.empty[MessagePublished]
+  private val sentMessages                 = mutable.HashMap.empty[String, MessagePublished]
+  private val timedOutMessages             = mutable.ArrayBuffer.empty[MessagePublished]
   private var periodicTimeoutScanTriggered = false
 
   private def triggerPeriodicTimeoutScan(): Unit =
@@ -54,7 +55,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
 
   override def init(): Behavior[AmqpMessageTrackerActor.AmqpMessage] = {
     // message was sent; add the timestamps to the map
-    case messageSent: MessagePublished =>
+    case messageSent: MessagePublished               =>
       sentMessages += messageSent.matchId -> messageSent
       if (messageSent.replyTimeout > 0) {
         triggerPeriodicTimeoutScan()
