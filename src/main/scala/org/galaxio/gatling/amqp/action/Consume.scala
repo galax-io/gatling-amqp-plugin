@@ -4,6 +4,7 @@ import io.gatling.commons.stats.{KO, OK}
 import io.gatling.commons.util.Clock
 import io.gatling.commons.validation.{Failure, Validation}
 import io.gatling.core.action.{Action, RequestAction}
+import io.gatling.core.actor.ActorRef
 import io.gatling.core.check.Check
 import io.gatling.core.controller.throttle.Throttler
 import io.gatling.core.session.{Expression, Session}
@@ -18,7 +19,7 @@ class Consume(
     val statsEngine: StatsEngine,
     val clock: Clock,
     val next: Action,
-    throttler: Option[Throttler],
+    throttler: Option[ActorRef[Throttler.Command]],
 ) extends RequestAction with AmqpLogging with NameGen {
   override val name: String = genName("amqpConsume")
 
@@ -30,7 +31,7 @@ class Consume(
       queueName <- attributes.queueName(session)
     } yield throttler
       .fold(consumeAndLog(reqName, queueName, session))(
-        _.throttle(session.scenario, () => consumeAndLog(reqName, queueName, session)),
+        _ ! Throttler.Command.ThrottledRequest(session.scenario, () => consumeAndLog(reqName, queueName, session)),
       )
 
   private def consumeAndLog(requestNameString: String, queueName: String, session: Session): Unit = {
