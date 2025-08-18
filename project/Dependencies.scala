@@ -1,7 +1,7 @@
 import sbt.*
 
 object Dependencies {
-  val gatlingVersion = "3.11.4"
+  val gatlingVersion = "3.11.5"
 
   lazy val gatlingCore: Seq[ModuleID] = Seq(
     "io.gatling" % "gatling-core"      % gatlingVersion % Provided,
@@ -13,8 +13,8 @@ object Dependencies {
     "io.gatling"            % "gatling-test-framework"    % gatlingVersion % "it,test",
   )
 
-  lazy val rabbitmq    = "com.rabbitmq"       % "amqp-client"   % "5.21.0"
-  lazy val commonsPool = "org.apache.commons" % "commons-pool2" % "2.12.0"
+  lazy val rabbitmq    = "com.rabbitmq"       % "amqp-client"   % "5.26.0"
+  lazy val commonsPool = "org.apache.commons" % "commons-pool2" % "2.12.1"
   lazy val fastUUID    = "com.eatthepath"     % "fast-uuid"     % "0.2.0"
 
 }

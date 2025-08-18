@@ -2,12 +2,22 @@ version: "3"
 
 services:
   rabbit1:
-    image: rabbitmq:3.8.9-management
+    image: rabbitmq:3.13.7-management
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
     - 5672:5672
     - 15672:15672
   rabbit2:
-    image: rabbitmq:3.8.9-management
+    image: rabbitmq:3.13.7-management
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
     - 5673:5672
     - 15673:15672
