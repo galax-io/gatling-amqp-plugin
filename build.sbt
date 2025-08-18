@@ -5,6 +5,9 @@ lazy val root = (project in file("."))
   .settings(
     name         := "gatling-amqp-plugin",
     scalaVersion := "2.13.16",
+    // Do not publish Gatling/GatlingIt configuration artifacts (prevents enterprisePackage on CI)
+    Gatling / publishArtifact   := false,
+    GatlingIt / publishArtifact := false,
     libraryDependencies ++= gatling ++ gatlingCore,
     libraryDependencies ++= Seq(rabbitmq, commonsPool, fastUUID),
     scalacOptions ++= Seq(
