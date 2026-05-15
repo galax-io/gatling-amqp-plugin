@@ -16,6 +16,7 @@ class AmqpMessageTracker(actor: ActorRef[AmqpMessageTrackerActor.AmqpMessage]) {
       session: Session,
       next: Action,
       requestName: String,
+      silent: Boolean = false,
   ): Unit =
     actor ! MessagePublished(
       matchId,
@@ -25,5 +26,6 @@ class AmqpMessageTracker(actor: ActorRef[AmqpMessageTrackerActor.AmqpMessage]) {
       session,
       next,
       requestName,
+      silent,
     )
 }

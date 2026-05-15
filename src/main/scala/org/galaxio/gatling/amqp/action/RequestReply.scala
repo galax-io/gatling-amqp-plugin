@@ -61,6 +61,7 @@ class RequestReply(
           session,
           next,
           requestNameString,
+          attributes.silent,
         )
       } catch {
         case e: Throwable =>
