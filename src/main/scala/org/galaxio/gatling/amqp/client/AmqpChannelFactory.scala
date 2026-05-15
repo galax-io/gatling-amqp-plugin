@@ -4,8 +4,13 @@ import com.rabbitmq.client.{Channel, Connection}
 import org.apache.commons.pool2.impl.DefaultPooledObject
 import org.apache.commons.pool2.{BasePooledObjectFactory, PooledObject}
 
-class AmqpChannelFactory(rabbitmqConnection: Connection) extends BasePooledObjectFactory[Channel] {
-  override def create(): Channel = rabbitmqConnection.createChannel()
+class AmqpChannelFactory(rabbitmqConnection: Connection, publisherConfirms: Boolean = false)
+    extends BasePooledObjectFactory[Channel] {
+  override def create(): Channel = {
+    val ch = rabbitmqConnection.createChannel()
+    if (publisherConfirms) ch.confirmSelect()
+    ch
+  }
 
   override def wrap(obj: Channel): PooledObject[Channel] = new DefaultPooledObject[Channel](obj)
 

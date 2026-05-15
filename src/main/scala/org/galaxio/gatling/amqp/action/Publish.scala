@@ -34,20 +34,22 @@ class Publish(
       if (logger.underlying.isDebugEnabled) {
         logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
       }
-      statsEngine.logResponse(session.scenario, session.groups, requestNameString, now, clock.nowMillis, OK, None, None)
+      if (!attributes.silent)
+        statsEngine.logResponse(session.scenario, session.groups, requestNameString, now, clock.nowMillis, OK, None, None)
     } catch {
       case e: Throwable =>
         logger.error(e.getMessage, e)
-        statsEngine.logResponse(
-          session.scenario,
-          session.groups,
-          requestNameString,
-          now,
-          clock.nowMillis,
-          KO,
-          Some("500"),
-          Some(e.getMessage),
-        )
+        if (!attributes.silent)
+          statsEngine.logResponse(
+            session.scenario,
+            session.groups,
+            requestNameString,
+            now,
+            clock.nowMillis,
+            KO,
+            Some("500"),
+            Some(e.getMessage),
+          )
     }
     next ! session
   }

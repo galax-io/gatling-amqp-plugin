@@ -12,7 +12,7 @@ import org.galaxio.gatling.amqp.protocol.{
   AmqpProtocolBuilderBase,
   RabbitMQConnectionFactoryBuilder,
 }
-import org.galaxio.gatling.amqp.request.{AmqpDslBuilderBase, PublishDslBuilder, RequestReplyDslBuilder}
+import org.galaxio.gatling.amqp.request.{AmqpDslBuilderBase, ConsumeDslBuilder, PublishDslBuilder, RequestReplyDslBuilder}
 
 trait AmqpDsl extends AmqpCheckSupport {
   def amqp(implicit configuration: GatlingConfiguration): AmqpProtocolBuilderBase.type = AmqpProtocolBuilderBase
@@ -48,6 +48,9 @@ trait AmqpDsl extends AmqpCheckSupport {
   implicit def amqpPublishDslBuilder2ActionBuilder(builder: PublishDslBuilder): ActionBuilder = builder.build()
 
   implicit def amqpRequestReplyDslBuilder2ActionBuilder(builder: RequestReplyDslBuilder): ActionBuilder =
+    builder.build()
+
+  implicit def amqpConsumeDslBuilder2ActionBuilder(builder: ConsumeDslBuilder): ActionBuilder =
     builder.build()
 
   implicit def rabbitMQ2ConnectionFactory(builder: RabbitMQConnectionFactoryBuilder): ConnectionFactory = builder.build

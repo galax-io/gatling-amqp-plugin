@@ -53,5 +53,7 @@ case class RequestReplyDslBuilder(attributes: AmqpAttributes, factory: AmqpAttri
   def check(checks: AmqpCheck*): RequestReplyDslBuilder =
     this.modify(_.attributes.checks).using(_ ::: checks.toList)
 
+  def silent: RequestReplyDslBuilder = this.modify(_.attributes.silent).setTo(true)
+
   def build(): ActionBuilder = factory(attributes)
 }

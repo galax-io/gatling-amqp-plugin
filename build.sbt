@@ -9,7 +9,7 @@ lazy val root = (project in file("."))
     Gatling / publishArtifact   := false,
     GatlingIt / publishArtifact := false,
     libraryDependencies ++= gatling ++ gatlingCore,
-    libraryDependencies ++= Seq(rabbitmq, commonsPool, fastUUID),
+    libraryDependencies ++= Seq(rabbitmq, commonsPool, fastUUID, scalaTest),
     scalacOptions ++= Seq(
       "-encoding",
       "utf8", // Option and arguments on same line
