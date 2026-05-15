@@ -3,12 +3,10 @@ package org.galaxio.gatling.amqp.request
 import io.gatling.core.session.Expression
 import org.galaxio.gatling.amqp.AmqpCheck
 
-case class AmqpAttributes(
+case class ConsumeAttributes(
     requestName: Expression[String],
-    destination: AmqpExchange,
-    selector: Option[String],
-    message: AmqpMessage,
-    messageProperties: AmqpMessageProperties = AmqpMessageProperties(),
+    queueName: Expression[String],
+    timeout: Long = 5000,
     checks: List[AmqpCheck] = Nil,
     silent: Boolean = false,
 )

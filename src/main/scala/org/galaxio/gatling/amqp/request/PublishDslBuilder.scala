@@ -49,5 +49,7 @@ case class PublishDslBuilder(attributes: AmqpAttributes, factory: AmqpAttributes
   def headers(hs: (String, Expression[String])*): PublishDslBuilder =
     hs.foldLeft(this) { case (rb, (k, v)) => rb.header(k, v) }
 
+  def silent: PublishDslBuilder = this.modify(_.attributes.silent).setTo(true)
+
   def build(): ActionBuilder = factory(attributes)
 }

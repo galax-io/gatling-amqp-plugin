@@ -17,4 +17,6 @@ object Dependencies {
   lazy val commonsPool = "org.apache.commons" % "commons-pool2" % "2.13.1"
   lazy val fastUUID    = "com.eatthepath"     % "fast-uuid"     % "0.2.0"
 
+  lazy val scalaTest = "org.scalatest" %% "scalatest" % "3.2.19" % Test
+
 }

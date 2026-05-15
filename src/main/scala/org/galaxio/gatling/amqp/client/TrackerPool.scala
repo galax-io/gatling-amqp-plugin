@@ -1,7 +1,7 @@
 package org.galaxio.gatling.amqp.client
 
 import akka.actor.ActorSystem
-import com.rabbitmq.client.Delivery
+import com.rabbitmq.client.{Channel, Delivery}
 import io.gatling.commons.util.Clock
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.stats.StatsEngine
@@ -12,6 +12,8 @@ import org.galaxio.gatling.amqp.protocol.AmqpMessageMatcher
 import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
 
 import java.util.concurrent.ConcurrentHashMap
+import scala.collection.mutable
+import scala.util.Try
 
 class TrackerPool(
     pool: AmqpConnectionPool,
@@ -21,7 +23,8 @@ class TrackerPool(
     configuration: GatlingConfiguration,
 ) extends AmqpLogging with NameGen {
 
-  private val trackers = new ConcurrentHashMap[String, AmqpMessageTracker]
+  private val trackers        = new ConcurrentHashMap[String, AmqpMessageTracker]
+  private val consumerEntries = mutable.ArrayBuffer.empty[(Channel, String)]
 
   def tracker(
       sourceQueue: String,
@@ -37,7 +40,7 @@ class TrackerPool(
 
         for (_ <- 1 to listenerThreadCount) {
           val consumerChannel = pool.createConsumerChannel
-          consumerChannel.basicConsume(
+          val consumerTag     = consumerChannel.basicConsume(
             sourceQueue,
             true,
             (_: String, message: Delivery) => {
@@ -56,9 +59,21 @@ class TrackerPool(
             },
             (_: String) => (),
           )
+          consumerEntries.synchronized {
+            consumerEntries += ((consumerChannel, consumerTag))
+          }
         }
 
         new AmqpMessageTracker(actor)
       },
     )
+
+  def close(): Unit =
+    consumerEntries.synchronized {
+      consumerEntries.foreach { case (channel, tag) =>
+        Try(channel.basicCancel(tag))
+        Try(channel.close())
+      }
+      consumerEntries.clear()
+    }
 }

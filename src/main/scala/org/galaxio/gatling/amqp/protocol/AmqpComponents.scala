@@ -13,6 +13,5 @@ case class AmqpComponents(
 ) extends ProtocolComponents {
   override def onStart: Session => Session = Session.Identity
 
-  override def onExit: Session => Unit = ProtocolComponents.NoopOnExit
-
+  override def onExit: Session => Unit = _ => trackerPool.close()
 }

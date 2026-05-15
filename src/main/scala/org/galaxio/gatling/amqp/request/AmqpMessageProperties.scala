@@ -42,7 +42,7 @@ object AmqpMessageProperties {
     contentType(s, bp, bp.contentType)
     contentEncoding(s, bp, bp.contentEncoding)
     deliveryMode(s, bp, i => bp.deliveryMode(i))
-    priority(s, bp, i => bp.deliveryMode(i))
+    priority(s, bp, i => bp.priority(i))
     correlationId(s, bp, bp.correlationId)
     replyTo(s, bp, bp.replyTo)
     expiration(s, bp, bp.expiration)

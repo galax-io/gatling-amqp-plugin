@@ -12,6 +12,8 @@ case class AmqpProtocolBuilder(
     replyTimeout: Option[Long] = None,
     responseTransformer: Option[AmqpProtocolMessage => AmqpProtocolMessage] = None,
     initActions: AmqpChannelInitActions = Nil,
+    channelPoolSize: Int = 16,
+    publisherConfirms: Boolean = false,
 ) {
 
   def usePersistentDeliveryMode: AmqpProtocolBuilder    = copy(deliveryMode = Persistent())
@@ -34,6 +36,8 @@ case class AmqpProtocolBuilder(
 
   def replyTimeout(timeout: Long): AmqpProtocolBuilder            = copy(replyTimeout = Some(timeout))
   def consumerThreadsCount(threadCount: Int): AmqpProtocolBuilder = copy(consumerThreadsCount = threadCount)
+  def channelPoolSize(size: Int): AmqpProtocolBuilder             = copy(channelPoolSize = size)
+  def usePublisherConfirms: AmqpProtocolBuilder                   = copy(publisherConfirms = true)
 
   def declare(q: AmqpQueue): AmqpProtocolBuilder    = this.copy(initActions = this.initActions :+ QueueDeclare(q))
   def declare(e: AmqpExchange): AmqpProtocolBuilder = this.copy(initActions = this.initActions :+ ExchangeDeclare(e))
@@ -56,5 +60,7 @@ case class AmqpProtocolBuilder(
       messageMatcher,
       responseTransformer,
       initActions,
+      channelPoolSize,
+      publisherConfirms,
     )
 }
