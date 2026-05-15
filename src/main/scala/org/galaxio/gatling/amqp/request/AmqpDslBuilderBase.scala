@@ -8,4 +8,6 @@ case class AmqpDslBuilderBase(requestName: Expression[String]) {
     PublishDslBuilderExchange(requestName, configuration)
   def requestReply(implicit configuration: GatlingConfiguration): RequestReplyDslBuilderExchange =
     RequestReplyDslBuilderExchange(requestName, configuration)
+  def consume(implicit configuration: GatlingConfiguration): ConsumeDslBuilderQueue              =
+    ConsumeDslBuilderQueue(requestName, configuration)
 }

@@ -101,6 +101,11 @@ public class RequestReplyDslBuilder implements ActionBuilder {
         return this;
     }
 
+    public RequestReplyDslBuilder silent() {
+        this.wrapped = wrapped.silent();
+        return this;
+    }
+
     public io.gatling.core.action.builder.ActionBuilder asScala(){
         return wrapped.build();
     }

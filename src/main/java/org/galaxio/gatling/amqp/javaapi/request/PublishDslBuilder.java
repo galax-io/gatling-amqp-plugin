@@ -90,6 +90,11 @@ public class PublishDslBuilder implements ActionBuilder {
         return this;
     }
 
+    public PublishDslBuilder silent() {
+        this.wrapped = wrapped.silent();
+        return this;
+    }
+
     public io.gatling.core.action.builder.ActionBuilder asScala(){
         return wrapped.build();
     }

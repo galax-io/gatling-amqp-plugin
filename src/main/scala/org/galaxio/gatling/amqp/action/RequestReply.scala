@@ -53,20 +53,29 @@ class RequestReply(
         if (logger.underlying.isDebugEnabled) {
           logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
         }
-        tracker.track(id, clock.nowMillis, replyTimeout, attributes.checks, session, next, requestNameString)
+        tracker.track(
+          id,
+          clock.nowMillis,
+          replyTimeout,
+          attributes.checks,
+          session,
+          next,
+          requestNameString,
+        )
       } catch {
         case e: Throwable =>
           logger.error(e.getMessage, e)
-          statsEngine.logResponse(
-            session.scenario,
-            session.groups,
-            requestNameString,
-            now,
-            clock.nowMillis,
-            KO,
-            Some("500"),
-            Some(e.getMessage),
-          )
+          if (!attributes.silent)
+            statsEngine.logResponse(
+              session.scenario,
+              session.groups,
+              requestNameString,
+              now,
+              clock.nowMillis,
+              KO,
+              Some("500"),
+              Some(e.getMessage),
+            )
       }
     }
 }

@@ -119,8 +119,6 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
     next ! session.logGroupRequestTimings(sent, received)
   }
 
-  /** Processes a matched message
-    */
   private def processMessage(
       session: Session,
       sent: Long,
