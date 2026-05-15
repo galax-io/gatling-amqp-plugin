@@ -56,7 +56,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
 
   override def init(): Behavior[AmqpMessageTrackerActor.AmqpMessage] = {
     // message was sent; add the timestamps to the map
-    case messageSent: MessagePublished               =>
+    case messageSent: MessagePublished =>
       sentMessages += messageSent.matchId -> messageSent
       if (messageSent.replyTimeout > 0) {
         triggerPeriodicTimeoutScan()
