@@ -27,6 +27,7 @@ object AmqpMessageTrackerActor {
       session: Session,
       next: Action,
       requestName: String,
+      silent: Boolean = false,
   ) extends AmqpMessage
 
   final case class MessageConsumed(
@@ -55,7 +56,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
 
   override def init(): Behavior[AmqpMessageTrackerActor.AmqpMessage] = {
     // message was sent; add the timestamps to the map
-    case messageSent: MessagePublished               =>
+    case messageSent: MessagePublished =>
       sentMessages += messageSent.matchId -> messageSent
       if (messageSent.replyTimeout > 0) {
         triggerPeriodicTimeoutScan()
@@ -65,8 +66,8 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
     // message was received; publish stats and remove from the map
     case MessageConsumed(matchId, received, message) =>
       // if key is missing, message was already acked and is a dup, or request timeout
-      sentMessages.remove(matchId).foreach { case MessagePublished(_, sent, _, checks, session, next, requestName) =>
-        processMessage(session, sent, received, checks, message, next, requestName)
+      sentMessages.remove(matchId).foreach { case MessagePublished(_, sent, _, checks, session, next, requestName, silent) =>
+        processMessage(session, sent, received, checks, message, next, requestName, silent)
       }
       stay
 
@@ -79,7 +80,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
         }
       }
 
-      for (MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName) <- timedOutMessages) {
+      for (MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent) <- timedOutMessages) {
         sentMessages.remove(matchId)
         executeNext(
           session.markAsFailed,
@@ -90,6 +91,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
           requestName,
           None,
           Some(s"Reply timeout after $receivedTimeout ms"),
+          silent,
         )
       }
       timedOutMessages.clear()
@@ -105,22 +107,22 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
       requestName: String,
       responseCode: Option[String],
       message: Option[String],
+      silent: Boolean = false,
   ): Unit = {
-    statsEngine.logResponse(
-      session.scenario,
-      session.groups,
-      requestName,
-      sent,
-      received,
-      status,
-      responseCode,
-      message,
-    )
+    if (!silent)
+      statsEngine.logResponse(
+        session.scenario,
+        session.groups,
+        requestName,
+        sent,
+        received,
+        status,
+        responseCode,
+        message,
+      )
     next ! session.logGroupRequestTimings(sent, received)
   }
 
-  /** Processes a matched message
-    */
   private def processMessage(
       session: Session,
       sent: Long,
@@ -129,6 +131,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
       message: AmqpProtocolMessage,
       next: Action,
       requestName: String,
+      silent: Boolean,
   ): Unit = {
     val (newSession, error) = Check.check(message, session, checks)
     error match {
@@ -142,9 +145,10 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
           requestName,
           message.responseCode,
           Some(errorMessage),
+          silent,
         )
       case _                           =>
-        executeNext(newSession, sent, received, OK, next, requestName, message.responseCode, message.responseCode)
+        executeNext(newSession, sent, received, OK, next, requestName, message.responseCode, message.responseCode, silent)
     }
   }
 }

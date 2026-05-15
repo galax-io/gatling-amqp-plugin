@@ -9,7 +9,6 @@ import scala.Function1;
 import java.util.Map;
 
 public class AmqpProtocolBuilder implements ProtocolBuilder{
-    public AmqpProtocolBuilder usePersistentDeliveryMode;
     private org.galaxio.gatling.amqp.protocol.AmqpProtocolBuilder wrapped;
 
     public AmqpProtocolBuilder(org.galaxio.gatling.amqp.protocol.AmqpProtocolBuilder wrapped) {
@@ -32,7 +31,7 @@ public class AmqpProtocolBuilder implements ProtocolBuilder{
     }
 
     public AmqpProtocolBuilder matchByCorrelationId() {
-        this.wrapped = wrapped.matchByMessageId();
+        this.wrapped = wrapped.matchByCorrelationId();
         return this;
     }
 
@@ -53,6 +52,16 @@ public class AmqpProtocolBuilder implements ProtocolBuilder{
 
     public AmqpProtocolBuilder consumerThreadsCount(Integer threadCount) {
         this.wrapped = wrapped.consumerThreadsCount(threadCount);
+        return this;
+    }
+
+    public AmqpProtocolBuilder channelPoolSize(Integer size) {
+        this.wrapped = wrapped.channelPoolSize(size);
+        return this;
+    }
+
+    public AmqpProtocolBuilder usePublisherConfirms() {
+        this.wrapped = wrapped.usePublisherConfirms();
         return this;
     }
 
