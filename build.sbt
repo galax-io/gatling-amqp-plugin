@@ -9,7 +9,8 @@ lazy val root = (project in file("."))
     Gatling / publishArtifact   := false,
     GatlingIt / publishArtifact := false,
     libraryDependencies ++= gatling ++ gatlingCore,
-    libraryDependencies ++= Seq(rabbitmq, commonsPool, fastUUID, scalaTest),
+    libraryDependencies ++= Seq(rabbitmq, commonsPool, fastUUID, scalaTest, testcontainersScalatest, testcontainersRabbitmq),
+    Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.galaxio.gatling.amqp.tags.DockerTest"),
     scalacOptions ++= Seq(
       "-encoding",
       "utf8", // Option and arguments on same line

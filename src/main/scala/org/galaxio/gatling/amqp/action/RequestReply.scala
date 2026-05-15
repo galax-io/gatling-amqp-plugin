@@ -38,44 +38,61 @@ class RequestReply(
       session: Session,
       publisher: AmqpPublisher,
   ): Unit =
-    resolveDestination(replyDestination, session).map { qName =>
-      val tracker = components.trackerPool.tracker(
-        qName,
-        components.protocol.consumersThreadCount,
-        components.protocol.messageMatcher,
-        components.protocol.responseTransformer,
-      )
-      val id      = components.protocol.messageMatcher.requestMatchId(msg)
-      val now     = clock.nowMillis
-      try {
-        publisher.publish(msg, session)
-        if (logger.underlying.isDebugEnabled) {
-          logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
-        }
-        tracker.track(
-          id,
-          clock.nowMillis,
-          replyTimeout,
-          attributes.checks,
-          session,
-          next,
-          requestNameString,
-          attributes.silent,
+    resolveDestination(replyDestination, session) match {
+      case io.gatling.commons.validation.Success(qName)   =>
+        val tracker = components.trackerPool.tracker(
+          qName,
+          components.protocol.consumersThreadCount,
+          components.protocol.messageMatcher,
+          components.protocol.responseTransformer,
         )
-      } catch {
-        case e: Throwable =>
-          logger.error(e.getMessage, e)
-          if (!attributes.silent)
-            statsEngine.logResponse(
-              session.scenario,
-              session.groups,
-              requestNameString,
-              now,
-              clock.nowMillis,
-              KO,
-              Some("500"),
-              Some(e.getMessage),
-            )
-      }
+        val id      = components.protocol.messageMatcher.requestMatchId(msg)
+        val now     = clock.nowMillis
+        try {
+          publisher.publish(msg, session)
+          if (logger.underlying.isDebugEnabled) {
+            logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
+          }
+          tracker.track(
+            id,
+            clock.nowMillis,
+            replyTimeout,
+            attributes.checks,
+            session,
+            next,
+            requestNameString,
+            attributes.silent,
+          )
+        } catch {
+          case e: Throwable =>
+            logger.error(e.getMessage, e)
+            if (!attributes.silent)
+              statsEngine.logResponse(
+                session.scenario,
+                session.groups,
+                requestNameString,
+                now,
+                clock.nowMillis,
+                KO,
+                Some("500"),
+                Some(e.getMessage),
+              )
+            next ! session.markAsFailed
+        }
+      case io.gatling.commons.validation.Failure(message) =>
+        logger.error(s"Could not resolve reply destination: $message")
+        val now = clock.nowMillis
+        if (!attributes.silent)
+          statsEngine.logResponse(
+            session.scenario,
+            session.groups,
+            requestNameString,
+            now,
+            clock.nowMillis,
+            KO,
+            Some("ERROR"),
+            Some(message),
+          )
+        next ! session.markAsFailed
     }
 }

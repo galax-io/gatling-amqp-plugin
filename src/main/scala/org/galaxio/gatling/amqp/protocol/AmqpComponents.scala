@@ -1,6 +1,5 @@
 package org.galaxio.gatling.amqp.protocol
 
-import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}
 import io.gatling.core.protocol.ProtocolComponents
 import io.gatling.core.session.Session
 import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}

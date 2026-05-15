@@ -1,12 +1,11 @@
 package org.galaxio.gatling.amqp.protocol
 
 import com.rabbitmq.client.{Channel, ConnectionFactory}
-import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}
-import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
 import io.gatling.core.CoreComponents
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.protocol.{Protocol, ProtocolKey}
 import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}
+import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters._
@@ -85,7 +84,9 @@ object AmqpProtocol {
         val replyPool   = getOrCreateConnectionReplyPool(amqpProtocol)
         coreComponents.actorSystem.registerOnTermination(replyPool.close())
 
-        amqpProtocol.initActions.foreach(runInitAction(requestPool.channel))
+        val initChannel = requestPool.channel
+        try amqpProtocol.initActions.foreach(runInitAction(initChannel))
+        finally requestPool.returnChannel(initChannel)
         val trackerPool = getOrCreateTrackerPool(coreComponents, replyPool)
 
         AmqpComponents(amqpProtocol, requestPool, replyPool, trackerPool)
