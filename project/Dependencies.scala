@@ -19,7 +19,7 @@ object Dependencies {
 
   lazy val scalaTest = "org.scalatest" %% "scalatest" % "3.2.19" % Test
 
-  lazy val testcontainersScalatest = "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.41.8" % Test
-  lazy val testcontainersRabbitmq  = "com.dimafeng" %% "testcontainers-scala-rabbitmq"  % "0.41.8" % Test
+  lazy val testcontainersScalatest = "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.44.1" % Test
+  lazy val testcontainersRabbitmq  = "com.dimafeng" %% "testcontainers-scala-rabbitmq"  % "0.44.1" % Test
 
 }
