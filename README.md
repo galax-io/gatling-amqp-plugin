@@ -1,26 +1,20 @@
 # Gatling AMQP Plugin
 
-[![Build](https://github.com/galax-io/gatling-amqp-plugin/workflows/Continuous%20Integration/badge.svg)](https://github.com/galax-io/gatling-amqp-plugin/actions/workflows/ci.yml)
+[![CI](https://github.com/galax-io/gatling-amqp-plugin/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/galax-io/gatling-amqp-plugin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/org.galaxio/gatling-amqp-plugin_2.13.svg?color=success)](https://search.maven.org/search?q=org.galaxio.gatling-amqp-plugin)
 [![codecov](https://codecov.io/github/galax-io/gatling-amqp-plugin/coverage.svg?branch=main)](https://codecov.io/github/galax-io/gatling-amqp-plugin?branch=main)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Scala Steward badge](https://img.shields.io/badge/Scala_Steward-helping-blue.svg?style=flat&logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAQCAMAAAARSr4IAAAAVFBMVEUAAACHjojlOy5NWlrKzcYRKjGFjIbp293YycuLa3pYY2LSqql4f3pCUFTgSjNodYRmcXUsPD/NTTbjRS+2jomhgnzNc223cGvZS0HaSD0XLjbaSjElhIr+AAAAAXRSTlMAQObYZgAAAHlJREFUCNdNyosOwyAIhWHAQS1Vt7a77/3fcxxdmv0xwmckutAR1nkm4ggbyEcg/wWmlGLDAA3oL50xi6fk5ffZ3E2E3QfZDCcCN2YtbEWZt+Drc6u6rlqv7Uk0LdKqqr5rk2UCRXOk0vmQKGfc94nOJyQjouF9H/wCc9gECEYfONoAAAAASUVORK5CYII=)](https://scala-steward.org)
 
-AMQP protocol plugin for [Gatling](https://gatling.io/) load testing framework. Supports RabbitMQ with publish, request-reply, and consume patterns.
+AMQP protocol plugin for [Gatling](https://gatling.io/) load testing framework. Supports RabbitMQ with publish, request-reply, and consume patterns with connection pooling.
 
 ## Table of Contents
 
+- [Compatibility](#compatibility)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Protocol Configuration](#protocol-configuration)
-  - [Connection Factory](#connection-factory)
-  - [Advanced Connection Settings](#advanced-connection-settings)
-  - [Protocol Options](#protocol-options)
-  - [Queue and Exchange Declarations](#queue-and-exchange-declarations)
 - [Actions](#actions)
-  - [Publish](#publish)
-  - [Request-Reply](#request-reply)
-  - [Consume](#consume)
 - [Message Properties](#message-properties)
 - [Checks](#checks)
 - [Silent Mode](#silent-mode)
@@ -29,19 +23,31 @@ AMQP protocol plugin for [Gatling](https://gatling.io/) load testing framework. 
 - [Contributing](#contributing)
 - [License](#license)
 
+## Compatibility
+
+| Plugin Version | Gatling | Scala | Java |
+|---|---|---|---|
+| 1.0.0+ | 3.13.x | 2.13 | 17+ |
+| 0.14.0 — 0.15.x | 3.11.x | 2.13 | 17+ |
+
+> **Branch strategy:** `main` targets Gatling 3.11.x, `latest/gatling` targets Gatling 3.13.x.
+
 ## Installation
 
-**Scala** (build.sbt):
+### Scala (sbt)
+
 ```scala
 libraryDependencies += "org.galaxio" %% "gatling-amqp-plugin" % "<version>" % Test
 ```
 
-**Java / Kotlin** (build.gradle):
-```groovy
-gatling "org.galaxio:gatling-amqp-plugin_2.13:<version>"
+### Java / Kotlin (Gradle Kotlin DSL)
+
+```kotlin
+gatling("org.galaxio:gatling-amqp-plugin_2.13:<version>")
 ```
 
-**Maven**:
+### Maven
+
 ```xml
 <dependency>
   <groupId>org.galaxio</groupId>
@@ -51,11 +57,17 @@ gatling "org.galaxio:gatling-amqp-plugin_2.13:<version>"
 </dependency>
 ```
 
-Requires Scala 2.13, Java 17+, Gatling 3.11+.
-
 ## Quick Start
 
-### Scala
+### Docker (local RabbitMQ)
+
+```bash
+docker run -d --name gatling-rabbit \
+  -p 5672:5672 -p 15672:15672 \
+  rabbitmq:3-management
+```
+
+### Minimal Scenario — Scala
 
 ```scala
 import org.galaxio.gatling.amqp.Predef._
@@ -86,7 +98,7 @@ class AmqpSimulation extends Simulation {
 }
 ```
 
-### Java
+### Minimal Scenario — Java
 
 ```java
 import static org.galaxio.gatling.amqp.javaapi.AmqpDsl.*;
@@ -112,6 +124,32 @@ public class AmqpSimulation extends Simulation {
 }
 ```
 
+### Minimal Scenario — Kotlin
+
+```kotlin
+import org.galaxio.gatling.amqp.javaapi.AmqpDsl.*
+import io.gatling.javaapi.core.CoreDsl.*
+
+class AmqpSimulation : Simulation() {
+  val amqpConf = amqp()
+    .connectionFactory(
+      rabbitmq().host("localhost").port(5672).username("guest").password("guest").build()
+    )
+    .usePersistentDeliveryMode()
+    .matchByMessageId()
+
+  val scn = scenario("AMQP Publish")
+    .exec(
+      amqp("publish").publish()
+        .queueExchange("test-queue")
+        .textMessage("""{"msg": "hello"}""")
+        .contentType("application/json")
+    )
+
+  init { setUp(scn.injectOpen(atOnceUsers(1)).protocols(amqpConf)) }
+}
+```
+
 ## Protocol Configuration
 
 ### Connection Factory
@@ -133,14 +171,13 @@ val cf = rabbitmq
   .port(5672)
   .username("guest")
   .password("guest")
-  .automaticRecovery(true)          // auto-reconnect on failure (default: true)
-  .networkRecoveryInterval(5000)     // reconnect interval in ms
-  .topologyRecovery(true)            // recover queues/exchanges (default: true)
-  .connectionTimeout(10000)          // TCP connection timeout in ms
-  .requestedHeartbeat(60)            // heartbeat interval in seconds
-  .requestedChannelMax(0)            // max channels per connection (0 = unlimited)
-  .useSslProtocol()                  // enable SSL with default protocol
-  // or .useSslProtocol("TLSv1.2")  // enable SSL with specific protocol
+  .automaticRecovery(true)
+  .networkRecoveryInterval(5000)
+  .topologyRecovery(true)
+  .connectionTimeout(10000)
+  .requestedHeartbeat(60)
+  .requestedChannelMax(0)
+  .useSslProtocol()
 ```
 
 ### Protocol Options
@@ -148,7 +185,6 @@ val cf = rabbitmq
 ```scala
 val amqpConf = amqp
   .connectionFactory(publishCf)                  // single connection factory
-  // or
   .connectionFactory(publishCf, replyCf)         // separate publish/reply connections
 
   .usePersistentDeliveryMode                     // delivery mode 2
@@ -184,8 +220,6 @@ val amqpConf = amqp
 
 ### Publish
 
-Publish messages to exchanges or queues:
-
 ```scala
 // Queue exchange
 amqp("publish").publish
@@ -210,8 +244,6 @@ amqp("publish-#{id}").publish
 
 ### Request-Reply
 
-Publish a message and wait for a reply:
-
 ```scala
 amqp("request-reply").requestReply
   .topicExchange("request-exchange", "request.key")
@@ -231,8 +263,6 @@ val amqpConf = amqp
 ```
 
 ### Consume
-
-Pull a single message from a queue:
 
 ```scala
 amqp("consume").consume
@@ -295,7 +325,7 @@ import org.galaxio.gatling.amqp.Predef._
 
 ## Silent Mode
 
-Mark requests as silent to suppress statistics logging. Useful for setup/teardown operations:
+Mark requests as silent to suppress statistics logging:
 
 ```scala
 amqp("setup-publish").publish
@@ -308,23 +338,17 @@ amqp("setup-rpc").requestReply
   .replyExchange("reply-queue")
   .textMessage("init")
   .silent
-
-amqp("drain").consume
-  .queue("my-queue")
-  .silent
 ```
 
 ## Publisher Confirms
 
-Enable publisher confirms for guaranteed delivery. The channel calls `waitForConfirmsOrDie` after each publish:
+Enable publisher confirms for guaranteed delivery:
 
 ```scala
 val amqpConf = amqp
   .connectionFactory(cf)
   .usePublisherConfirms
 ```
-
-**Note:** Publisher confirms add latency per publish. Use when delivery guarantee is more important than throughput.
 
 ## Examples
 
