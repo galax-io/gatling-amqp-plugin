@@ -1,12 +1,12 @@
 package org.galaxio.gatling.amqp.client
 
-import akka.actor.ActorRef
 import io.gatling.core.action.Action
+import io.gatling.core.actor.ActorRef
 import io.gatling.core.session.Session
 import org.galaxio.gatling.amqp.AmqpCheck
 import org.galaxio.gatling.amqp.client.AmqpMessageTrackerActor.MessagePublished
 
-class AmqpMessageTracker(actor: ActorRef) {
+class AmqpMessageTracker(actor: ActorRef[AmqpMessageTrackerActor.AmqpMessage]) {
 
   def track(
       matchId: String,

@@ -2,6 +2,7 @@ package org.galaxio.gatling.amqp.action
 
 import io.gatling.commons.validation.{Validation, _}
 import io.gatling.core.action.RequestAction
+import io.gatling.core.actor.ActorRef
 import io.gatling.core.controller.throttle.Throttler
 import io.gatling.core.session.{Expression, Session}
 import io.gatling.core.util.NameGen
@@ -12,7 +13,7 @@ import org.galaxio.gatling.amqp.request.{AmqpAttributes, AmqpMessageProperties, 
 abstract class AmqpAction(
     attributes: AmqpAttributes,
     components: AmqpComponents,
-    throttler: Option[Throttler],
+    throttler: Option[ActorRef[Throttler.Command]],
 ) extends RequestAction with AmqpLogging with NameGen {
 
   override val requestName: Expression[String] = attributes.requestName
@@ -30,7 +31,7 @@ abstract class AmqpAction(
                              .map(components.protocol.messageMatcher.prepareRequest)
     } yield throttler
       .fold(publishAndLogMessage(reqName, message, session))(
-        _.throttle(session.scenario, () => publishAndLogMessage(reqName, message, session)),
+        _ ! Throttler.Command.ThrottledRequest(session.scenario, () => publishAndLogMessage(reqName, message, session)),
       )
 
   protected def publishAndLogMessage(
