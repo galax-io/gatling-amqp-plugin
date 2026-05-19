@@ -13,8 +13,7 @@ class AmqpConnectionPool(
     publisherConfirms: Boolean = false,
 ) {
 
-  private val executor: java.util.concurrent.ExecutorService = Executors.newFixedThreadPool(consumerThreadsCount)
-  private val connection: Connection                         = factory.newConnection(executor)
+  private val connection: Connection = factory.newConnection(Executors.newFixedThreadPool(consumerThreadsCount))
 
   private val poolConfig = new GenericObjectPoolConfig[Channel]()
   poolConfig.setMaxTotal(channelPoolSize)
@@ -30,7 +29,6 @@ class AmqpConnectionPool(
       if (connection.isOpen) {
         connection.close()
       }
-      executor.shutdownNow()
     }
   }
 

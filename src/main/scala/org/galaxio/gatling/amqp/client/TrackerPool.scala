@@ -3,7 +3,6 @@ package org.galaxio.gatling.amqp.client
 import com.rabbitmq.client.{Channel, Delivery}
 import io.gatling.commons.util.Clock
 import io.gatling.core.actor.ActorSystem
-import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.stats.StatsEngine
 import io.gatling.core.util.NameGen
 import org.galaxio.gatling.amqp.action.AmqpLogging
@@ -20,7 +19,6 @@ class TrackerPool(
     system: ActorSystem,
     statsEngine: StatsEngine,
     clock: Clock,
-    configuration: GatlingConfiguration,
 ) extends AmqpLogging with NameGen {
 
   private val trackers        = new ConcurrentHashMap[String, AmqpMessageTracker]

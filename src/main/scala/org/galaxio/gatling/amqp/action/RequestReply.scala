@@ -1,6 +1,6 @@
 package org.galaxio.gatling.amqp.action
 
-import io.gatling.commons.stats.{KO, OK}
+import io.gatling.commons.stats.KO
 import io.gatling.commons.util.Clock
 import io.gatling.commons.validation.Validation
 import io.gatling.core.action.Action
@@ -26,7 +26,7 @@ class RequestReply(
 
   override val name: String = genName("amqpRequestReply")
 
-  def resolveDestination(dest: AmqpExchange, session: Session): Validation[String] =
+  private def resolveDestination(dest: AmqpExchange, session: Session): Validation[String] =
     dest match {
       case AmqpDirectExchange(name, _, _) => name(session)
       case AmqpQueueExchange(name, _)     => name(session)
@@ -39,61 +39,44 @@ class RequestReply(
       session: Session,
       publisher: AmqpPublisher,
   ): Unit =
-    resolveDestination(replyDestination, session) match {
-      case io.gatling.commons.validation.Success(qName)   =>
-        val tracker = components.trackerPool.tracker(
-          qName,
-          components.protocol.consumersThreadCount,
-          components.protocol.messageMatcher,
-          components.protocol.responseTransformer,
-        )
-        val id      = components.protocol.messageMatcher.requestMatchId(msg)
-        val now     = clock.nowMillis
-        try {
-          publisher.publish(msg, session)
-          if (logger.underlying.isDebugEnabled) {
-            logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
-          }
-          tracker.track(
-            id,
-            clock.nowMillis,
-            replyTimeout,
-            attributes.checks,
-            session,
-            next,
-            requestNameString,
-            attributes.silent,
-          )
-        } catch {
-          case e: Throwable =>
-            logger.error(e.getMessage, e)
-            if (!attributes.silent)
-              statsEngine.logResponse(
-                session.scenario,
-                session.groups,
-                requestNameString,
-                now,
-                clock.nowMillis,
-                KO,
-                Some("500"),
-                Some(e.getMessage),
-              )
-            next ! session.markAsFailed
+    resolveDestination(replyDestination, session).map { qName =>
+      val tracker = components.trackerPool.tracker(
+        qName,
+        components.protocol.consumersThreadCount,
+        components.protocol.messageMatcher,
+        components.protocol.responseTransformer,
+      )
+      val id      = components.protocol.messageMatcher.requestMatchId(msg)
+      val now     = clock.nowMillis
+      try {
+        publisher.publish(msg, session)
+        if (logger.underlying.isDebugEnabled) {
+          logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
         }
-      case io.gatling.commons.validation.Failure(message) =>
-        logger.error(s"Could not resolve reply destination: $message")
-        val now = clock.nowMillis
-        if (!attributes.silent)
-          statsEngine.logResponse(
-            session.scenario,
-            session.groups,
-            requestNameString,
-            now,
-            clock.nowMillis,
-            KO,
-            Some("ERROR"),
-            Some(message),
-          )
-        next ! session.markAsFailed
+        tracker.track(
+          id,
+          clock.nowMillis,
+          replyTimeout,
+          attributes.checks,
+          session,
+          next,
+          requestNameString,
+          attributes.silent,
+        )
+      } catch {
+        case e: Throwable =>
+          logger.error(e.getMessage, e)
+          if (!attributes.silent)
+            statsEngine.logResponse(
+              session.scenario,
+              session.groups,
+              requestNameString,
+              now,
+              clock.nowMillis,
+              KO,
+              Some("500"),
+              Some(e.getMessage),
+            )
+      }
     }
 }

@@ -55,6 +55,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
     }
 
   override def init(): Behavior[AmqpMessageTrackerActor.AmqpMessage] = {
+    // message was sent; add the timestamps to the map
     case messageSent: MessagePublished =>
       sentMessages += messageSent.matchId -> messageSent
       if (messageSent.replyTimeout > 0) {
@@ -62,7 +63,9 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
       }
       stay
 
+    // message was received; publish stats and remove from the map
     case MessageConsumed(matchId, received, message) =>
+      // if key is missing, message was already acked and is a dup, or request timeout
       sentMessages.remove(matchId).foreach { case MessagePublished(_, sent, _, checks, session, next, requestName, silent) =>
         processMessage(session, sent, received, checks, message, next, requestName, silent)
       }
@@ -148,5 +151,4 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
         executeNext(newSession, sent, received, OK, next, requestName, message.responseCode, message.responseCode, silent)
     }
   }
-
 }
