@@ -180,5 +180,93 @@ class RabbitMQIntegrationSpec extends AnyWordSpec with Matchers with ForAllTestC
         conn.close()
       }
     }
+
+    "publisher confirms acknowledge published messages" taggedAs DockerTest in {
+      val pool = new AmqpConnectionPool(connectionFactory, 2, 4, publisherConfirms = true)
+      try {
+        val ch = pool.channel
+        ch.queueDeclare("test_confirms", false, false, true, null)
+        ch.basicPublish("", "test_confirms", null, "confirmed msg".getBytes)
+        ch.waitForConfirmsOrDie(5000)
+        pool.returnChannel(ch)
+
+        // Verify the message actually arrived in the queue
+        val conn   = connectionFactory.newConnection()
+        val readCh = conn.createChannel()
+        try {
+          val response = readCh.basicGet("test_confirms", true)
+          response should not be null
+          new String(response.getBody) shouldBe "confirmed msg"
+        } finally {
+          readCh.close()
+          conn.close()
+        }
+      } finally {
+        pool.close()
+      }
+    }
+
+    "channel invalidation recovery provides a fresh working channel" taggedAs DockerTest in {
+      val poolSize = 4
+      val pool     = new AmqpConnectionPool(connectionFactory, 2, poolSize)
+      try {
+        val ch = pool.channel
+        // Force a channel error via passive declare of a non-existent queue
+        try {
+          ch.queueDeclarePassive("non_existent_queue_recovery_" + System.nanoTime())
+        } catch {
+          case _: Exception =>
+            pool.invalidate(ch)
+        }
+
+        // Borrow a new channel — it must be open and functional
+        val freshCh = pool.channel
+        freshCh.isOpen shouldBe true
+
+        // Verify the fresh channel can perform real broker operations
+        freshCh.queueDeclare("test_recovery", false, false, true, null)
+        freshCh.basicPublish("", "test_recovery", null, "recovered".getBytes)
+        val response = freshCh.basicGet("test_recovery", true)
+        response should not be null
+        new String(response.getBody) shouldBe "recovered"
+        pool.returnChannel(freshCh)
+      } finally {
+        pool.close()
+      }
+    }
+
+    "two-pool request-reply architecture" taggedAs DockerTest in {
+      val requestPool = new AmqpConnectionPool(connectionFactory, 2, 4)
+      val replyPool   = new AmqpConnectionPool(connectionFactory, 2, 4)
+      try {
+        // Declare a shared queue via the request pool
+        val pubCh = requestPool.channel
+        pubCh.queueDeclare("test_two_pool", false, false, true, null)
+        pubCh.basicPublish("", "test_two_pool", null, "request payload".getBytes)
+        requestPool.returnChannel(pubCh)
+
+        // Consume the message via the reply pool
+        val consCh   = replyPool.channel
+        val latch    = new CountDownLatch(1)
+        var received = ""
+
+        consCh.basicConsume(
+          "test_two_pool",
+          true,
+          (_: String, delivery: Delivery) => {
+            received = new String(delivery.getBody)
+            latch.countDown()
+          },
+          (_: String) => (),
+        )
+
+        latch.await(10, TimeUnit.SECONDS) shouldBe true
+        received shouldBe "request payload"
+        replyPool.returnChannel(consCh)
+      } finally {
+        requestPool.close()
+        replyPool.close()
+      }
+    }
   }
 }
