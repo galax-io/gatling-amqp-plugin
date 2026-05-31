@@ -99,11 +99,11 @@ jobs:
         with:
           fail_ci_if_error: false
 
-  release:
-    name: Release (tag-driven)
+  tag:
+    name: Create Release Tag
     needs: [test]
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     steps:
@@ -111,28 +111,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup Java (Temurin 17) with sbt cache
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: sbt
-      - name: Setup sbt
-        uses: sbt/setup-sbt@v1
-      - name: Cache Coursier
-        uses: coursier/cache-action@v6
-      - name: Cache Ivy/SBT
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.ivy2/cache
-            ~/.sbt
-            ~/.cache/coursier
-          key: sbt-${{ runner.os }}-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/**') }}
-          restore-keys: sbt-${{ runner.os }}-
-      - name: Compute next version & create tag on main
-        id: bump
-        if: github.ref == 'refs/heads/main'
+      - name: Compute next version & create tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -142,7 +121,6 @@ jobs:
           git fetch --tags --force --prune
 
           LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" --first-parent 2>/dev/null || echo "")
-          echo "last_tag=${LAST_TAG}" >> "$GITHUB_OUTPUT"
           RANGE="${LAST_TAG:+${LAST_TAG}..HEAD}"
 
           BUMP="patch"
@@ -171,7 +149,8 @@ jobs:
             TAG_COMMIT=$(git rev-list -n 1 "${NEXT_TAG}")
             HEAD_COMMIT=$(git rev-parse HEAD)
             if [ "${TAG_COMMIT}" = "${HEAD_COMMIT}" ]; then
-              SKIP_TAG_CREATE=1
+              echo "Tag ${NEXT_TAG} already exists at HEAD — skipping."
+              exit 0
             else
               while git rev-parse -q --verify "refs/tags/${NEXT_TAG}" >/dev/null; do
                 IFS='.' read -r MAJOR MINOR PATCH <<< "${NEXT_TAG#v}"
@@ -181,19 +160,47 @@ jobs:
             fi
           fi
 
-          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
-          echo "tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+          echo "Creating tag ${NEXT_TAG} (bump=$BUMP)"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
 
-          if [ "${SKIP_TAG_CREATE:-0}" != "1" ]; then
-            git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
-            git push origin "$NEXT_TAG"
-          fi
+          git tag -a "$NEXT_TAG" -m "Release $NEXT_TAG"
+          git push origin "$NEXT_TAG"
+
+  release:
+    name: Release (tag-driven)
+    needs: [test]
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Java (Temurin 17) with sbt cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: sbt
+      - name: Setup sbt
+        uses: sbt/setup-sbt@v1
+      - name: Cache Coursier
+        uses: coursier/cache-action@v6
+      - name: Cache Ivy/SBT
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ivy2/cache
+            ~/.sbt
+            ~/.cache/coursier
+          key: sbt-${{ runner.os }}-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/**') }}
+          restore-keys: sbt-${{ runner.os }}-
       - name: Publish to Sonatype via sbt-ci-release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && steps.bump.outputs.tag)
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
@@ -203,14 +210,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF##*/}"
-          else
-            TAG="${{ steps.bump.outputs.tag }}"
-            export GITHUB_REF="refs/tags/${TAG}"
-            export GITHUB_REF_NAME="${TAG}"
-          fi
-
+          TAG="${GITHUB_REF##*/}"
           VERSION="${TAG#v}"
           echo "Publishing version $VERSION (tag $TAG)"
 
@@ -226,19 +226,14 @@ jobs:
       - name: Generate Changelog
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v5
-        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && steps.bump.outputs.tag)
         with:
           mode: "COMMIT"
-          fromTag: ${{ github.ref == 'refs/heads/main' && steps.bump.outputs.last_tag || '' }}
-          toTag:   ${{ github.ref == 'refs/heads/main' && steps.bump.outputs.tag || '' }}
           configuration: ".github/changelog/release-changelog-builder.json"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && steps.bump.outputs.tag)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref == 'refs/heads/main' && steps.bump.outputs.tag || '' }}
           body: ${{ steps.changelog.outputs.changelog }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
