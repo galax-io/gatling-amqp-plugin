@@ -41,7 +41,10 @@ class Consume(
       val channel  = pool.channel
       val response =
         try channel.basicGet(queueName, true)
-        finally pool.returnChannel(channel)
+        finally {
+          if (channel.isOpen) pool.returnChannel(channel)
+          else pool.invalidate(channel)
+        }
 
       if (response == null) {
         if (!attributes.silent)
