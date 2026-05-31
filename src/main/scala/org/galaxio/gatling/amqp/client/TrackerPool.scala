@@ -69,26 +69,16 @@ class TrackerPool(
       },
     )
 
-  /** Increment the pending message count for the given queue.
-    * Must be called before tracking a message for proper cleanup.
-    */
   def incrementPending(sourceQueue: String): Unit =
     pendingCounts.computeIfAbsent(sourceQueue, _ => new AtomicInteger(0)).incrementAndGet()
 
-  /** Decrement the pending message count and remove the tracker if it reaches zero.
-    * This ensures dynamic (per-request or per-user) reply queues are cleaned up
-    * once all expected replies have been consumed.
-    */
   def decrementPendingAndEvict(sourceQueue: String): Unit = {
     val count = pendingCounts.get(sourceQueue)
-    if (count != null && count.decrementAndGet() <= 0) {
+    if (count != null && count.decrementAndGet() == 0) {
       removeTracker(sourceQueue)
     }
   }
 
-  /** Remove a tracker and release its consumers and channels.
-    * Use for dynamic (per-request or per-user) reply queues that are no longer needed.
-    */
   def removeTracker(sourceQueue: String): Unit = {
     trackers.remove(sourceQueue)
     pendingCounts.remove(sourceQueue)
