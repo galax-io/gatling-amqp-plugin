@@ -7,7 +7,7 @@ import io.gatling.commons.util.Clock
 import io.gatling.core.action.Action
 import io.gatling.core.actor.ActorSystem
 import io.gatling.core.session.Session
-import io.gatling.core.stats.{NoOpStatsEngine, StatsEngine}
+import io.gatling.core.stats.NoOpStatsEngine
 import org.galaxio.gatling.amqp.client.{AmqpConnectionPool, TrackerPool}
 import org.galaxio.gatling.amqp.protocol.CorrelationIdMessageMatcher
 import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
@@ -19,6 +19,7 @@ import org.testcontainers.utility.DockerImageName
 
 import java.util.UUID
 import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
+import scala.annotation.tailrec
 
 class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTestContainer with BeforeAndAfterAll {
 
@@ -51,7 +52,7 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
     override def nowMillis: Long = System.currentTimeMillis()
   }
 
-  private def recordingStatsEngine(): (StatsEngine, ConcurrentLinkedQueue[(String, Status, Option[String])]) = {
+  private def recordingStatsEngine(): (NoOpStatsEngine, ConcurrentLinkedQueue[(String, Status, Option[String])]) = {
     val log    = new ConcurrentLinkedQueue[(String, Status, Option[String])]()
     val engine = new NoOpStatsEngine {
       override def logResponse(
@@ -68,6 +69,7 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
     (engine, log)
   }
 
+  // Bypasses Action.! which dispatches via session.eventLoop (null in tests)
   private def capturingAction(
       actionName: String,
       latch: CountDownLatch,
@@ -81,6 +83,34 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       }
       override def !(session: Session): Unit       = execute(session)
     }
+
+  @tailrec
+  private def awaitConsumerCount(queue: String, expected: Int, remainingMs: Int = 5000): Unit =
+    if (remainingMs <= 0) fail(s"Timed out waiting for $expected consumers on $queue")
+    else {
+      val conn    = connectionFactory.newConnection()
+      val channel = conn.createChannel()
+      val count   =
+        try channel.consumerCount(queue)
+        finally {
+          channel.close()
+          conn.close()
+        }
+      if (count != expected) {
+        Thread.sleep(50)
+        awaitConsumerCount(queue, expected, remainingMs - 50)
+      }
+    }
+
+  private def deleteQueue(queue: String): Unit = {
+    val conn    = connectionFactory.newConnection()
+    val channel = conn.createChannel()
+    try channel.queueDelete(queue)
+    finally {
+      channel.close()
+      conn.close()
+    }
+  }
 
   "AmqpConnectionPool integration" should {
 
@@ -151,10 +181,10 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       val (statsEngine, _) = recordingStatsEngine()
       val replyPool        = new AmqpConnectionPool(connectionFactory, 2, 4)
       val publishPool      = new AmqpConnectionPool(connectionFactory, 2, 4)
+      val replyQueue       = "test_rr_reply_" + UUID.randomUUID().toString.take(8)
 
       try {
         val trackerPool = new TrackerPool(replyPool, actorSystem, statsEngine, testClock)
-        val replyQueue  = "test_rr_reply_" + UUID.randomUUID().toString.take(8)
 
         val pubChannel = publishPool.channel
         pubChannel.queueDeclare(replyQueue, false, false, false, null)
@@ -173,7 +203,7 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
 
         tracker.track(matchId, testClock.nowMillis, 10000L, Nil, session, action, "test-rr", false)
 
-        Thread.sleep(200)
+        awaitConsumerCount(replyQueue, 1)
 
         val replyProps = new AMQP.BasicProperties.Builder().correlationId(corrId).build()
         pubChannel.basicPublish("", replyQueue, replyProps, "reply-body".getBytes)
@@ -187,16 +217,17 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       } finally {
         publishPool.close()
         replyPool.close()
+        deleteQueue(replyQueue)
       }
     }
 
     "timeout when no reply arrives" taggedAs DockerTest in {
       val (statsEngine, statsLog) = recordingStatsEngine()
       val replyPool               = new AmqpConnectionPool(connectionFactory, 2, 4)
+      val replyQueue              = "test_timeout_reply_" + UUID.randomUUID().toString.take(8)
 
       try {
         val trackerPool = new TrackerPool(replyPool, actorSystem, statsEngine, testClock)
-        val replyQueue  = "test_timeout_reply_" + UUID.randomUUID().toString.take(8)
 
         val setupChannel = replyPool.createConsumerChannel
         setupChannel.queueDeclare(replyQueue, false, false, false, null)
@@ -226,6 +257,7 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
         trackerPool.close()
       } finally {
         replyPool.close()
+        deleteQueue(replyQueue)
       }
     }
 
@@ -233,10 +265,10 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       val (statsEngine, _) = recordingStatsEngine()
       val replyPool        = new AmqpConnectionPool(connectionFactory, 4, 8)
       val publishPool      = new AmqpConnectionPool(connectionFactory, 2, 8)
+      val replyQueue       = "test_concurrent_reply_" + UUID.randomUUID().toString.take(8)
 
       try {
         val trackerPool = new TrackerPool(replyPool, actorSystem, statsEngine, testClock)
-        val replyQueue  = "test_concurrent_reply_" + UUID.randomUUID().toString.take(8)
 
         val setupChannel = publishPool.channel
         setupChannel.queueDeclare(replyQueue, false, false, false, null)
@@ -255,22 +287,14 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
           val message = AmqpProtocolMessage(props, s"request-$i".getBytes)
           val matchId = CorrelationIdMessageMatcher.requestMatchId(message)
 
-          val action = new Action {
-            override val name: String                    = s"capture-$i"
-            override def execute(session: Session): Unit = {
-              allSessionsReceived.add(session)
-              completionLatch.countDown()
-            }
-            override def !(session: Session): Unit       = execute(session)
-          }
-
+          val action  = capturingAction(s"capture-$i", completionLatch, allSessionsReceived)
           val session = Session("test", i.toLong, null)
           publishedCorrelationIds.add(corrId)
 
           tracker.track(matchId, testClock.nowMillis, 10000L, Nil, session, action, s"rr-$i", false)
         }
 
-        Thread.sleep(200)
+        awaitConsumerCount(replyQueue, 2)
 
         import scala.jdk.CollectionConverters._
         publishedCorrelationIds.asScala.foreach { corrId =>
@@ -288,6 +312,7 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       } finally {
         publishPool.close()
         replyPool.close()
+        deleteQueue(replyQueue)
       }
     }
   }
@@ -297,10 +322,10 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
     "close cancels consumers and closes channels" taggedAs DockerTest in {
       val (statsEngine, _) = recordingStatsEngine()
       val replyPool        = new AmqpConnectionPool(connectionFactory, 2, 4)
+      val replyQueue       = "test_cleanup_" + UUID.randomUUID().toString.take(8)
 
       try {
         val trackerPool = new TrackerPool(replyPool, actorSystem, statsEngine, testClock)
-        val replyQueue  = "test_cleanup_" + UUID.randomUUID().toString.take(8)
 
         val conn    = connectionFactory.newConnection()
         val channel = conn.createChannel()
@@ -310,23 +335,14 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
 
         trackerPool.tracker(replyQueue, 3, CorrelationIdMessageMatcher, None)
 
-        Thread.sleep(500)
+        awaitConsumerCount(replyQueue, 3)
 
         trackerPool.close()
 
-        Thread.sleep(500)
-
-        val verifyConn    = connectionFactory.newConnection()
-        val verifyChannel = verifyConn.createChannel()
-        val consumers     =
-          try verifyChannel.consumerCount(replyQueue)
-          finally {
-            verifyChannel.close()
-            verifyConn.close()
-          }
-        consumers shouldBe 0
+        awaitConsumerCount(replyQueue, 0)
       } finally {
         replyPool.close()
+        deleteQueue(replyQueue)
       }
     }
 
