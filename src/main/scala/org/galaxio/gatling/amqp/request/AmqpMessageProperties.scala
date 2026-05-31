@@ -39,30 +39,28 @@ object AmqpMessageProperties {
   def toBasicProperties(p: AmqpMessageProperties, s: Session): Validation[AMQP.BasicProperties] = {
     val bp = new AMQP.BasicProperties().builder()
     import p._
-    contentType(s, bp, bp.contentType)
-    contentEncoding(s, bp, bp.contentEncoding)
-    deliveryMode(s, bp, i => bp.deliveryMode(i))
-    priority(s, bp, i => bp.priority(i))
-    correlationId(s, bp, bp.correlationId)
-    replyTo(s, bp, bp.replyTo)
-    expiration(s, bp, bp.expiration)
-    messageId(s, bp, bp.messageId)
-    timestamp(s, bp, bp.timestamp)
-    `type`(s, bp, bp.`type`)
-    userId(s, bp, bp.userId)
-    appId(s, bp, bp.appId)
-    clusterId(s, bp, bp.clusterId)
-      .flatMap(b =>
-        headers
-          .foldLeft(Map.empty[String, AnyRef].success) { case (resolvedHeaders, (key, value)) =>
-            for {
-              v  <- value(s)
-              rh <- resolvedHeaders
-            } yield rh + (key -> v)
-          }
-          .map(h => b.headers(h.asJava)),
-      )
-      .map(_.build())
+    for {
+      b  <- contentType(s, bp, bp.contentType)
+      b  <- contentEncoding(s, b, b.contentEncoding)
+      b  <- deliveryMode(s, b, i => b.deliveryMode(i))
+      b  <- priority(s, b, i => b.priority(i))
+      b  <- correlationId(s, b, b.correlationId)
+      b  <- replyTo(s, b, b.replyTo)
+      b  <- expiration(s, b, b.expiration)
+      b  <- messageId(s, b, b.messageId)
+      b  <- timestamp(s, b, b.timestamp)
+      b  <- `type`(s, b, b.`type`)
+      b  <- userId(s, b, b.userId)
+      b  <- appId(s, b, b.appId)
+      b  <- clusterId(s, b, b.clusterId)
+      rh <- headers
+              .foldLeft(Map.empty[String, AnyRef].success) { case (resolvedHeaders, (key, value)) =>
+                for {
+                  v  <- value(s)
+                  rh <- resolvedHeaders
+                } yield rh + (key -> v)
+              }
+    } yield b.headers(rh.asJava).build()
 
   }
 }
