@@ -17,6 +17,10 @@ class AmqpConnectionPool(
 
   private val poolConfig = new GenericObjectPoolConfig[Channel]()
   poolConfig.setMaxTotal(channelPoolSize)
+  poolConfig.setTestOnBorrow(true)
+  poolConfig.setTestOnReturn(true)
+  poolConfig.setTimeBetweenEvictionRuns(java.time.Duration.ofSeconds(30))
+  poolConfig.setMinEvictableIdleDuration(java.time.Duration.ofMinutes(5))
 
   private val channelPool: ObjectPool[Channel] =
     new GenericObjectPool[Channel](new AmqpChannelFactory(connection, publisherConfirms), poolConfig)
@@ -35,7 +39,9 @@ class AmqpConnectionPool(
   def channel: Channel                 = {
     channelPool.borrowObject()
   }
-  def returnChannel(ch: Channel): Unit = channelPool.returnObject(ch)
+  def returnChannel(ch: Channel): Unit =
+    if (ch.isOpen) channelPool.returnObject(ch)
+    else channelPool.invalidateObject(ch)
 
   def invalidate(ch: Channel): Unit = channelPool.invalidateObject(ch)
 }
