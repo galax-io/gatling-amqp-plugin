@@ -247,11 +247,13 @@ amqp("publish-#{id}").publish
 ```scala
 amqp("request-reply").requestReply
   .topicExchange("request-exchange", "request.key")
-  .replyExchange("reply-exchange", "reply.key")
+  .replyExchange("reply-queue")
   .textMessage("""{"query": "data"}""")
   .messageId("#{msgId}")
   .check(jsonPath("$.result").is("ok"))
 ```
+
+The request destination supports `queueExchange`, `directExchange`, and `topicExchange`. The reply destination (`.replyExchange(name)`) specifies the queue where the plugin listens for replies. Reply routing is always queue-based.
 
 Multi-broker setup (publish to one broker, consume reply from another):
 

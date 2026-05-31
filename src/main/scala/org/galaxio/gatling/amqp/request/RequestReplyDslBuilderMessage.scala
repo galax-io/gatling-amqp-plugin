@@ -15,11 +15,13 @@ case class RequestReplyDslBuilderMessage(
     configuration: GatlingConfiguration,
 ) {
 
-  /** Add a reply queue
+  /** Set the reply queue where the plugin listens for responses.
     */
   def replyExchange(name: Expression[String]): RequestReplyDslBuilderMessage = replyDestination(AmqpQueueExchange(name))
   private def replyDestination(destination: AmqpExchange)                    = this.copy(replyDest = destination)
-  def noReplyTo: RequestReplyDslBuilderMessage                               = this.copy(setReplyTo = false)
+
+  @deprecated("noReplyTo has no runtime effect — the AMQP replyTo property is not auto-set", "0.x")
+  def noReplyTo: RequestReplyDslBuilderMessage = this.copy(setReplyTo = false)
 
   def textMessage(text: Expression[String], charset: Charset = configuration.core.charset): RequestReplyDslBuilder =
     message(TextAmqpMessage(text, charset))

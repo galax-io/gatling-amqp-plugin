@@ -16,6 +16,7 @@ public class RequestReplyDslBuilderMessage {
         return this;
     }
 
+    @Deprecated
     public RequestReplyDslBuilderMessage noReplyTo(){
         this.wrapped = wrapped.noReplyTo();
         return this;
