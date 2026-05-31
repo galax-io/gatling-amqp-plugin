@@ -40,14 +40,16 @@ class RequestReply(
       publisher: AmqpPublisher,
   ): Unit =
     resolveDestination(replyDestination, session).map { qName =>
-      val tracker = components.trackerPool.tracker(
+      val trackerPool = components.trackerPool
+      val tracker     = trackerPool.tracker(
         qName,
         components.protocol.consumersThreadCount,
         components.protocol.messageMatcher,
         components.protocol.responseTransformer,
       )
-      val id      = components.protocol.messageMatcher.requestMatchId(msg)
-      val now     = clock.nowMillis
+      trackerPool.incrementPending(qName)
+      val id          = components.protocol.messageMatcher.requestMatchId(msg)
+      val now         = clock.nowMillis
       try {
         publisher.publish(msg, session)
         if (logger.underlying.isDebugEnabled) {
@@ -62,9 +64,11 @@ class RequestReply(
           next,
           requestNameString,
           attributes.silent,
+          onComplete = Some(() => trackerPool.decrementPendingAndEvict(qName)),
         )
       } catch {
         case e: Throwable =>
+          trackerPool.decrementPendingAndEvict(qName)
           logger.error(e.getMessage, e)
           if (!attributes.silent)
             statsEngine.logResponse(
