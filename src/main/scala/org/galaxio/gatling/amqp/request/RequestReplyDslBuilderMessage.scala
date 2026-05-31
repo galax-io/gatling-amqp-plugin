@@ -10,7 +10,6 @@ case class RequestReplyDslBuilderMessage(
     requestName: Expression[String],
     destination: AmqpExchange,
     replyDest: AmqpExchange,
-    setReplyTo: Boolean,
     configuration: GatlingConfiguration,
 ) {
 
@@ -18,9 +17,6 @@ case class RequestReplyDslBuilderMessage(
     */
   def replyExchange(name: Expression[String]): RequestReplyDslBuilderMessage = replyDestination(AmqpQueueExchange(name))
   private def replyDestination(destination: AmqpExchange)                    = this.copy(replyDest = destination)
-
-  @deprecated("noReplyTo has no runtime effect — the AMQP replyTo property is not auto-set", "0.x")
-  def noReplyTo: RequestReplyDslBuilderMessage = this.copy(setReplyTo = false)
 
   def textMessage(text: Expression[String], charset: Charset = configuration.core.charset): RequestReplyDslBuilder =
     message(TextAmqpMessage(text, charset))
@@ -30,6 +26,6 @@ case class RequestReplyDslBuilderMessage(
   private def message(mess: AmqpMessage) =
     RequestReplyDslBuilder(
       AmqpAttributes(requestName, destination, mess),
-      RequestReplyBuilder(_, replyDest, setReplyTo, configuration),
+      RequestReplyBuilder(_, replyDest, configuration),
     )
 }

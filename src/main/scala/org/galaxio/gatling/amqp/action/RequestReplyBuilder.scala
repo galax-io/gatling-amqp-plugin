@@ -12,7 +12,6 @@ import org.galaxio.gatling.amqp.request.AmqpAttributes
 case class RequestReplyBuilder(
     attributes: AmqpAttributes,
     replyDest: AmqpExchange,
-    setReplyTo: Boolean,
     configuration: GatlingConfiguration,
 ) extends ActionBuilder {
   private def components(protocolComponentsRegistry: ProtocolComponentsRegistry): AmqpComponents =
