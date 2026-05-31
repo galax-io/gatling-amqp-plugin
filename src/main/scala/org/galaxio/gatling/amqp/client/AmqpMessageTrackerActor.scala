@@ -28,6 +28,7 @@ object AmqpMessageTrackerActor {
       next: Action,
       requestName: String,
       silent: Boolean = false,
+      onComplete: Option[() => Unit] = None,
   ) extends AmqpMessage
 
   final case class MessageConsumed(
@@ -66,8 +67,10 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
     // message was received; publish stats and remove from the map
     case MessageConsumed(matchId, received, message) =>
       // if key is missing, message was already acked and is a dup, or request timeout
-      sentMessages.remove(matchId).foreach { case MessagePublished(_, sent, _, checks, session, next, requestName, silent) =>
-        processMessage(session, sent, received, checks, message, next, requestName, silent)
+      sentMessages.remove(matchId).foreach {
+        case MessagePublished(_, sent, _, checks, session, next, requestName, silent, onComplete) =>
+          processMessage(session, sent, received, checks, message, next, requestName, silent)
+          onComplete.foreach(_())
       }
       stay
 
@@ -80,7 +83,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
         }
       }
 
-      for (MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent) <- timedOutMessages) {
+      for (MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent, onComplete) <- timedOutMessages) {
         sentMessages.remove(matchId)
         executeNext(
           session.markAsFailed,
@@ -93,6 +96,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
           Some(s"Reply timeout after $receivedTimeout ms"),
           silent,
         )
+        onComplete.foreach(_())
       }
       timedOutMessages.clear()
       stay
