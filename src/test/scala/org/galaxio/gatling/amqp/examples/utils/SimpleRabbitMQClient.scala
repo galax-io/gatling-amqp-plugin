@@ -3,6 +3,7 @@ package org.galaxio.gatling.amqp.examples.utils
 import com.rabbitmq.client._
 
 import java.nio.charset.StandardCharsets
+import scala.util.Try
 
 /** Simple RabbitMQClient which consumes messages from one broker and write them to other broker.
   */
@@ -23,7 +24,7 @@ object SimpleRabbitMQClient {
     writeChannel.basicPublish("", writeQueue, message.getProperties, "Message processed".getBytes(StandardCharsets.UTF_8))
   }
 
-  val cancelCallback: CancelCallback = (consumerTag: String) => {}
+  val cancelCallback: CancelCallback = (_: String) => {}
 
   def readAndWrite(): String = {
     readChannel.queueDeclare(readQueue, true, false, false, null)
@@ -31,12 +32,12 @@ object SimpleRabbitMQClient {
   }
 
   def tearDown(): Unit = {
-    readChannel.queueDelete(readQueue)
-    writeChannel.queueDelete(writeQueue)
-    readChannel.close()
-    writeChannel.close()
-    readConnection.close()
-    writeConnection.close()
+    Try(readChannel.queueDelete(readQueue))
+    Try(writeChannel.queueDelete(writeQueue))
+    Try(readChannel.close())
+    Try(writeChannel.close())
+    Try(readConnection.close())
+    Try(writeConnection.close())
   }
 
   def setup(): Unit = {
