@@ -59,7 +59,11 @@ gatling("org.galaxio:gatling-amqp-plugin_2.13:<version>")
 
 ## Quick Start
 
-### Docker (local RabbitMQ)
+### Prerequisites
+
+You need a running RabbitMQ instance. The examples below use `queueExchange("test-queue")`, which publishes directly to the default exchange with routing key `test-queue`. **The queue must exist before the test runs** — otherwise messages are discarded by the broker (no error is reported to the publisher).
+
+### 1. Start RabbitMQ
 
 ```bash
 docker run -d --name gatling-rabbit \
@@ -67,7 +71,21 @@ docker run -d --name gatling-rabbit \
   rabbitmq:3-management
 ```
 
-### Minimal Scenario — Scala
+The management UI is available at <http://localhost:15672> (guest/guest).
+
+### 2. Create the required queue
+
+Using the management CLI inside the container:
+
+```bash
+docker exec gatling-rabbit rabbitmqadmin declare queue name=test-queue durable=false
+```
+
+Alternatively, let the plugin declare the queue automatically — see [Queue and Exchange Declarations](#queue-and-exchange-declarations) below.
+
+### 3. Run the simulation
+
+#### Scala
 
 ```scala
 import org.galaxio.gatling.amqp.Predef._
@@ -98,7 +116,7 @@ class AmqpSimulation extends Simulation {
 }
 ```
 
-### Minimal Scenario — Java
+#### Java
 
 ```java
 import static org.galaxio.gatling.amqp.javaapi.AmqpDsl.*;
@@ -124,7 +142,7 @@ public class AmqpSimulation extends Simulation {
 }
 ```
 
-### Minimal Scenario — Kotlin
+#### Kotlin
 
 ```kotlin
 import org.galaxio.gatling.amqp.javaapi.AmqpDsl.*
@@ -149,6 +167,83 @@ class AmqpSimulation : Simulation() {
   init { setUp(scn.injectOpen(atOnceUsers(1)).protocols(amqpConf)) }
 }
 ```
+
+### 4. Verify it worked
+
+Purge stale messages, run the simulation, then check:
+
+```bash
+# Before the test — clear any leftover messages
+docker exec gatling-rabbit rabbitmqadmin purge queue name=test-queue
+
+# Run the simulation (step 3), then inspect:
+docker exec gatling-rabbit rabbitmqadmin get queue=test-queue count=10
+```
+
+You should see the JSON payload `{"msg": "hello"}` in the output. If the queue is empty, the message was routed to a non-existent queue (check spelling) or the queue was not declared before the test.
+
+You can also verify via the management UI at <http://localhost:15672/#/queues/%2F/test-queue> — click "Get messages" to inspect the content.
+
+### 5. Request-Reply walkthrough
+
+A request-reply test publishes a message and waits for a response on a reply queue.
+
+```bash
+# Create the request and reply queues
+docker exec gatling-rabbit rabbitmqadmin declare queue name=request-queue durable=false
+docker exec gatling-rabbit rabbitmqadmin declare queue name=reply-queue durable=false
+```
+
+Start a simple echo consumer on your host (requires Python 3 and `pip install pika`):
+
+```bash
+# echo_consumer.py — reads from request-queue, replies to the replyTo queue
+python3 -c "
+import pika
+conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+ch = conn.channel()
+def on_msg(channel, method, props, body):
+    ch.basic_publish(exchange='', routing_key=props.reply_to,
+                     properties=pika.BasicProperties(correlation_id=props.message_id),
+                     body=body)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+    print(f'Replied to {props.reply_to}')
+ch.basic_consume(queue='request-queue', on_message_callback=on_msg)
+print('Waiting for messages on request-queue...')
+ch.start_consuming()
+" &
+```
+
+> Run the consumer in a separate terminal (or background with `&` as shown). After the test you can stop it with `kill %1`.
+
+Scala simulation:
+
+```scala
+import org.galaxio.gatling.amqp.Predef._
+import io.gatling.core.Predef._
+
+val amqpConf = amqp
+  .connectionFactory(
+    rabbitmq.host("localhost").port(5672).username("guest").password("guest").vhost("/")
+  )
+  .replyTimeout(60000)
+  .consumerThreadsCount(8)
+  .matchByMessageId
+
+val scn = scenario("Request-Reply")
+  .exec(
+    amqp("rpc-call").requestReply
+      .queueExchange("request-queue")
+      .replyExchange("reply-queue")
+      .textMessage("""{"action": "ping"}""")
+      .contentType("application/json")
+      .check(bodyString.exists)
+  )
+
+setUp(scn.inject(atOnceUsers(1))).protocols(amqpConf)
+```
+
+If no consumer is running, the request will time out (default 60 s per `replyTimeout`) and Gatling reports a KO — this confirms the round-trip is wired correctly.
 
 ## Protocol Configuration
 
