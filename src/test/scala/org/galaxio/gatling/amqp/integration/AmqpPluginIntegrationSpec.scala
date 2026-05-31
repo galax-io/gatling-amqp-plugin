@@ -19,7 +19,6 @@ import org.testcontainers.utility.DockerImageName
 
 import java.util.UUID
 import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
-import scala.annotation.tailrec
 
 class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTestContainer with BeforeAndAfterAll {
 
@@ -84,33 +83,33 @@ class AmqpPluginIntegrationSpec extends AnyWordSpec with Matchers with ForAllTes
       override def !(session: Session): Unit       = execute(session)
     }
 
-  @tailrec
-  private def awaitConsumerCount(queue: String, expected: Int, remainingMs: Int = 5000): Unit =
-    if (remainingMs <= 0) fail(s"Timed out waiting for $expected consumers on $queue")
-    else {
-      val conn    = connectionFactory.newConnection()
-      val channel = conn.createChannel()
-      val count   =
-        try channel.consumerCount(queue)
-        finally {
-          channel.close()
-          conn.close()
-        }
-      if (count != expected) {
-        Thread.sleep(50)
-        awaitConsumerCount(queue, expected, remainingMs - 50)
-      }
-    }
-
-  private def deleteQueue(queue: String): Unit = {
+  private def awaitConsumerCount(queue: String, expected: Int, timeoutMs: Int = 5000): Unit = {
     val conn    = connectionFactory.newConnection()
     val channel = conn.createChannel()
-    try channel.queueDelete(queue)
-    finally {
+    try {
+      var remaining = timeoutMs
+      while (channel.consumerCount(queue) != expected && remaining > 0) {
+        Thread.sleep(50)
+        remaining -= 50
+      }
+      if (channel.consumerCount(queue) != expected)
+        fail(s"Timed out waiting for $expected consumers on $queue")
+    } finally {
       channel.close()
       conn.close()
     }
   }
+
+  private def deleteQueue(queue: String): Unit =
+    scala.util.Try {
+      val conn    = connectionFactory.newConnection()
+      val channel = conn.createChannel()
+      try channel.queueDelete(queue)
+      finally {
+        channel.close()
+        conn.close()
+      }
+    }
 
   "AmqpConnectionPool integration" should {
 
