@@ -30,7 +30,7 @@ case class RequestReplyDslBuilderMessage(
 
   private def message(mess: AmqpMessage) =
     RequestReplyDslBuilder(
-      AmqpAttributes(requestName, destination, messageSelector, mess),
+      AmqpAttributes(requestName, destination, mess),
       RequestReplyBuilder(_, replyDest, setReplyTo, configuration),
     )
 }

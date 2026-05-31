@@ -6,12 +6,6 @@ import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.session.Expression
 import org.galaxio.gatling.amqp.checks.AmqpCheckSupport
-import org.galaxio.gatling.amqp.protocol.{
-  AmqpProtocol,
-  AmqpProtocolBuilder,
-  AmqpProtocolBuilderBase,
-  RabbitMQConnectionFactoryBuilder,
-}
 import org.galaxio.gatling.amqp.request.{AmqpDslBuilderBase, ConsumeDslBuilder, PublishDslBuilder, RequestReplyDslBuilder}
 
 trait AmqpDsl extends AmqpCheckSupport {

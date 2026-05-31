@@ -42,7 +42,6 @@ class PublishDslBuilderSpec extends AnyFlatSpec with Matchers {
   private def defaultAttrs: AmqpAttributes = AmqpAttributes(
     requestName = requestName,
     destination = dummyExchange,
-    selector = None,
     message = dummyMessage,
   )
 
