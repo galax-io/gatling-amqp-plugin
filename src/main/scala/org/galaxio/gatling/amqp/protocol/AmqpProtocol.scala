@@ -58,6 +58,17 @@ object AmqpProtocol {
           requestPool.returnChannel(ch)
         }
 
+        if (amqpProtocol.replyInitActions.nonEmpty) {
+          val ch = replyPool.channel
+          try amqpProtocol.replyInitActions.foreach(runInitAction(ch))
+          catch {
+            case e: Exception =>
+              replyPool.invalidate(ch)
+              throw e
+          }
+          replyPool.returnChannel(ch)
+        }
+
         val trackerPool = new TrackerPool(
           replyPool,
           coreComponents.actorSystem,
@@ -80,6 +91,7 @@ case class AmqpProtocol(
     messageMatcher: AmqpMessageMatcher,
     responseTransformer: Option[AmqpProtocolMessage => AmqpProtocolMessage],
     initActions: AmqpChannelInitActions,
+    replyInitActions: AmqpChannelInitActions = Nil,
     channelPoolSize: Int = 16,
     publisherConfirms: Boolean = false,
 ) extends Protocol {

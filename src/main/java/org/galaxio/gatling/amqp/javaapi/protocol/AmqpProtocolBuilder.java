@@ -115,6 +115,55 @@ public class AmqpProtocolBuilder implements ProtocolBuilder{
         return this;
     }
 
+    public AmqpProtocolBuilder replyDeclare(AmqpQueue q) {
+        this.wrapped = wrapped.replyDeclare(org.galaxio.gatling.amqp.Predef.queue(
+                q.getName(),
+                q.getDurable(),
+                q.getExclusive(),
+                q.getAutoDelete(),
+                scala.collection.immutable.Map.from(asScala(q.getArguments()))
+        ));
+        return this;
+    }
+
+    public AmqpProtocolBuilder replyDeclare(AmqpExchange e) {
+        this.wrapped = wrapped.replyDeclare(org.galaxio.gatling.amqp.Predef.exchange(
+                e.getName(),
+                e.getExchangeType(),
+                e.getDurable(),
+                e.getAutoDelete(),
+                scala.collection.immutable.Map.from(asScala(e.getArguments()))
+        ));
+        return this;
+    }
+
+    public AmqpProtocolBuilder replyBindQueue(
+            AmqpQueue q,
+            AmqpExchange e,
+            String routingKey,
+            Map<String, Object> args
+    ) {
+        this.wrapped = wrapped.replyBindQueue(
+                org.galaxio.gatling.amqp.Predef.queue(
+                        q.getName(),
+                        q.getDurable(),
+                        q.getExclusive(),
+                        q.getAutoDelete(),
+                        scala.collection.immutable.Map.from(asScala(q.getArguments()))
+                ),
+                org.galaxio.gatling.amqp.Predef.exchange(
+                        e.getName(),
+                        e.getExchangeType(),
+                        e.getDurable(),
+                        e.getAutoDelete(),
+                        scala.collection.immutable.Map.from(asScala(e.getArguments()))
+                ),
+                routingKey,
+                scala.collection.immutable.Map.from(asScala(args))
+        );
+        return this;
+    }
+
     @Override
     public Protocol protocol() {
         return wrapped.build();

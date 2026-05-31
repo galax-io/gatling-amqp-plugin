@@ -21,6 +21,7 @@ class AmqpProtocolBuilderSpec extends AnyFlatSpec with Matchers {
     builder.replyTimeout shouldBe None
     builder.responseTransformer shouldBe None
     builder.initActions shouldBe Nil
+    builder.replyInitActions shouldBe Nil
   }
 
   it should "set persistent delivery mode" in {
@@ -155,5 +156,71 @@ class AmqpProtocolBuilderSpec extends AnyFlatSpec with Matchers {
     val builder = defaultBuilder.bindQueue(q, e, "rk", args)
 
     builder.initActions.head shouldBe BindQueue("q1", "e1", "rk", args)
+  }
+
+  it should "append QueueDeclare to replyInitActions when declaring a reply queue" in {
+    val q       = AmqpQueue("reply-queue", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+    val builder = defaultBuilder.replyDeclare(q)
+
+    builder.replyInitActions should have size 1
+    builder.replyInitActions.head shouldBe QueueDeclare(q)
+    builder.initActions shouldBe Nil
+  }
+
+  it should "append ExchangeDeclare to replyInitActions when declaring a reply exchange" in {
+    val e       =
+      AmqpExchange("reply-exchange", BuiltinExchangeType.TOPIC, durable = true, autoDelete = false, arguments = Map.empty)
+    val builder = defaultBuilder.replyDeclare(e)
+
+    builder.replyInitActions should have size 1
+    builder.replyInitActions.head shouldBe ExchangeDeclare(e)
+    builder.initActions shouldBe Nil
+  }
+
+  it should "append BindQueue to replyInitActions when binding a reply queue" in {
+    val q       = AmqpQueue("reply-queue", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+    val e       = AmqpExchange("reply-exchange", BuiltinExchangeType.TOPIC, durable = true, autoDelete = false, arguments = Map.empty)
+    val builder = defaultBuilder.replyBindQueue(q, e, "reply.key")
+
+    builder.replyInitActions should have size 1
+    builder.replyInitActions.head shouldBe BindQueue("reply-queue", "reply-exchange", "reply.key", Map.empty)
+    builder.initActions shouldBe Nil
+  }
+
+  it should "keep request and reply init actions separate" in {
+    val reqQ   = AmqpQueue("req-queue", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+    val replyQ = AmqpQueue("reply-queue", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+    val e      = AmqpExchange("e1", BuiltinExchangeType.DIRECT, durable = true, autoDelete = false, arguments = Map.empty)
+
+    val builder = defaultBuilder
+      .declare(reqQ)
+      .declare(e)
+      .replyDeclare(replyQ)
+      .replyDeclare(e)
+      .replyBindQueue(replyQ, e, "reply.rk")
+
+    builder.initActions should have size 2
+    builder.initActions(0) shouldBe QueueDeclare(reqQ)
+    builder.initActions(1) shouldBe ExchangeDeclare(e)
+
+    builder.replyInitActions should have size 3
+    builder.replyInitActions(0) shouldBe QueueDeclare(replyQ)
+    builder.replyInitActions(1) shouldBe ExchangeDeclare(e)
+    builder.replyInitActions(2) shouldBe BindQueue("reply-queue", "e1", "reply.rk", Map.empty)
+  }
+
+  it should "build an AmqpProtocol with replyInitActions preserved" in {
+    val q      = AmqpQueue("q1", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+    val replyQ = AmqpQueue("reply-q1", durable = true, exclusive = false, autoDelete = false, arguments = Map.empty)
+
+    val protocol = defaultBuilder
+      .declare(q)
+      .replyDeclare(replyQ)
+      .build
+
+    protocol.initActions should have size 1
+    protocol.initActions.head shouldBe QueueDeclare(q)
+    protocol.replyInitActions should have size 1
+    protocol.replyInitActions.head shouldBe QueueDeclare(replyQ)
   }
 }
