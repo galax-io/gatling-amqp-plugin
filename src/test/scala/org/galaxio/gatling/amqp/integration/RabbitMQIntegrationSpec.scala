@@ -1,8 +1,9 @@
 package org.galaxio.gatling.amqp.integration
 
 import com.dimafeng.testcontainers.{ForAllTestContainer, RabbitMQContainer}
-import com.rabbitmq.client.{ConnectionFactory, Delivery}
+import com.rabbitmq.client.{BuiltinExchangeType, ConnectionFactory, Delivery}
 import org.galaxio.gatling.amqp.client.AmqpConnectionPool
+import org.galaxio.gatling.amqp.protocol._
 import org.galaxio.gatling.amqp.tags.DockerTest
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
@@ -112,6 +113,48 @@ class RabbitMQIntegrationSpec extends AnyWordSpec with Matchers with ForAllTestC
       } finally {
         channel.close()
         conn.close()
+      }
+    }
+
+    "init actions do not deplete channel pool" taggedAs DockerTest in {
+      val poolSize = 2
+      val pool     = new AmqpConnectionPool(connectionFactory, 2, poolSize)
+      try {
+        // Simulate init action pattern: borrow, use for declarations, return
+        val ch = pool.channel
+        ch.exchangeDeclare("init_test_exchange", "topic", false, true, null)
+        ch.queueDeclare("init_test_queue", false, false, true, null)
+        ch.queueBind("init_test_queue", "init_test_exchange", "test.#")
+        pool.returnChannel(ch)
+
+        // All pool channels should still be available
+        val borrowed = (1 to poolSize).map(_ => pool.channel)
+        borrowed.foreach(_.isOpen shouldBe true)
+        borrowed.foreach(pool.returnChannel)
+      } finally {
+        pool.close()
+      }
+    }
+
+    "init action failure invalidates channel without depleting pool" taggedAs DockerTest in {
+      val poolSize = 2
+      val pool     = new AmqpConnectionPool(connectionFactory, 2, poolSize)
+      try {
+        val ch = pool.channel
+        // Force a channel error by using a passive declare on a non-existent queue
+        try {
+          ch.queueDeclarePassive("non_existent_queue_xyz_" + System.nanoTime())
+        } catch {
+          case _: Exception =>
+            pool.invalidate(ch)
+        }
+
+        // Pool should still be usable at full capacity
+        val borrowed = (1 to poolSize).map(_ => pool.channel)
+        borrowed.foreach(_.isOpen shouldBe true)
+        borrowed.foreach(pool.returnChannel)
+      } finally {
+        pool.close()
       }
     }
 

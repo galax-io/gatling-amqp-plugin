@@ -83,7 +83,16 @@ object AmqpProtocol {
         val replyPool   = getOrCreateConnectionReplyPool(amqpProtocol)
         coreComponents.actorSystem.registerOnTermination(replyPool.close())
 
-        amqpProtocol.initActions.foreach(runInitAction(requestPool.channel))
+        if (amqpProtocol.initActions.nonEmpty) {
+          val ch = requestPool.channel
+          try amqpProtocol.initActions.foreach(runInitAction(ch))
+          catch {
+            case e: Exception =>
+              requestPool.invalidate(ch)
+              throw e
+          }
+          requestPool.returnChannel(ch)
+        }
         val trackerPool = getOrCreateTrackerPool(coreComponents, replyPool)
         coreComponents.actorSystem.registerOnTermination(trackerPool.close())
 
