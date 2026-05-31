@@ -37,6 +37,7 @@ class Publish(
       }
       if (!attributes.silent)
         statsEngine.logResponse(session.scenario, session.groups, requestNameString, now, clock.nowMillis, OK, None, None)
+      next ! session
     } catch {
       case e: Throwable =>
         logger.error(e.getMessage, e)
@@ -52,8 +53,6 @@ class Publish(
             Some(e.getMessage),
           )
         next ! session.markAsFailed
-        return
     }
-    next ! session
   }
 }
