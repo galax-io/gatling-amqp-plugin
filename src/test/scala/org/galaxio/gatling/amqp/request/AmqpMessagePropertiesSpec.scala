@@ -187,4 +187,132 @@ class AmqpMessagePropertiesSpec extends AnyFlatSpec with Matchers {
     result shouldBe a[Success[_]]
     result.toOption.get.getClusterId shouldBe "cluster-1"
   }
+
+  it should "propagate failure from contentType expression" in {
+    val props  = AmqpMessageProperties(contentType = Some((_: Session) => "contentType resolution failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("contentType resolution failed"))
+  }
+
+  it should "propagate failure from contentEncoding expression" in {
+    val props  = AmqpMessageProperties(contentEncoding = Some((_: Session) => "contentEncoding failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("contentEncoding failed"))
+  }
+
+  it should "propagate failure from deliveryMode expression" in {
+    val props  = AmqpMessageProperties(deliveryMode = Some((_: Session) => "deliveryMode failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("deliveryMode failed"))
+  }
+
+  it should "propagate failure from priority expression" in {
+    val props  = AmqpMessageProperties(priority = Some((_: Session) => "priority failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("priority failed"))
+  }
+
+  it should "propagate failure from correlationId expression" in {
+    val props  = AmqpMessageProperties(correlationId = Some((_: Session) => "correlationId failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("correlationId failed"))
+  }
+
+  it should "propagate failure from replyTo expression" in {
+    val props  = AmqpMessageProperties(replyTo = Some((_: Session) => "replyTo failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("replyTo failed"))
+  }
+
+  it should "propagate failure from expiration expression" in {
+    val props  = AmqpMessageProperties(expiration = Some((_: Session) => "expiration failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("expiration failed"))
+  }
+
+  it should "propagate failure from messageId expression" in {
+    val props  = AmqpMessageProperties(messageId = Some((_: Session) => "messageId failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("messageId failed"))
+  }
+
+  it should "propagate failure from timestamp expression" in {
+    val props  = AmqpMessageProperties(timestamp = Some((_: Session) => "timestamp failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("timestamp failed"))
+  }
+
+  it should "propagate failure from type expression" in {
+    val props  = AmqpMessageProperties(`type` = Some((_: Session) => "type failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("type failed"))
+  }
+
+  it should "propagate failure from userId expression" in {
+    val props  = AmqpMessageProperties(userId = Some((_: Session) => "userId failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("userId failed"))
+  }
+
+  it should "propagate failure from appId expression" in {
+    val props  = AmqpMessageProperties(appId = Some((_: Session) => "appId failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("appId failed"))
+  }
+
+  it should "propagate failure from clusterId expression" in {
+    val props  = AmqpMessageProperties(clusterId = Some((_: Session) => "clusterId failed".failure))
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("clusterId failed"))
+  }
+
+  it should "propagate failure from header expression" in {
+    val headers: Map[String, io.gatling.core.session.Expression[AnyRef]] = Map(
+      "x-good-header" -> ((_: Session) => ("value": AnyRef).success),
+      "x-bad-header"  -> ((_: Session) => "header resolution failed".failure),
+    )
+    val props                                                            = AmqpMessageProperties(headers = headers)
+    val result                                                           = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    result.onFailure(msg => msg should include("header resolution failed"))
+  }
+
+  it should "propagate the first failure when multiple properties fail" in {
+    val props  = AmqpMessageProperties(
+      contentType = Some((_: Session) => "contentType failed".failure),
+      messageId = Some((_: Session) => "messageId failed".failure),
+    )
+    val result = AmqpMessageProperties.toBasicProperties(props, session)
+
+    result shouldBe a[Failure]
+    // The first failure in the chain (contentType) should be reported
+    result.onFailure(msg => msg should include("contentType failed"))
+  }
 }
