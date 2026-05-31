@@ -1,4 +1,9 @@
-package org.galaxio.gatling.javaapi.aqmp.examples
+package org.galaxio.gatling.amqp.javaapi.examples
+
+import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.Supplier
+import java.util.stream.Stream
 
 object Utils {
     private val counter = AtomicInteger(1)

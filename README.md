@@ -367,8 +367,11 @@ val amqpConf = amqp
 
 ### Kotlin
 
+> **Note:** Kotlin examples use the Java API facade and are provided as reference. They are not compiled by CI (no Kotlin compiler plugin is configured in the build).
+
 - [Publish](src/test/kotlin/org/galaxio/gatling/amqp/javaapi/examples/PublishExample.kt)
 - [Request-Reply](src/test/kotlin/org/galaxio/gatling/amqp/javaapi/examples/RequestReplyExample.kt)
+- [Custom Matching](src/test/kotlin/org/galaxio/gatling/amqp/javaapi/examples/RequestReplyWithOwnMatchingExample.kt)
 - [Two Brokers](src/test/kotlin/org/galaxio/gatling/amqp/javaapi/examples/RequestReplyTwoBrokerExample.kt)
 
 ## Contributing
