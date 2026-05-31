@@ -11,7 +11,6 @@ case class RequestReplyDslBuilderMessage(
     destination: AmqpExchange,
     replyDest: AmqpExchange,
     setReplyTo: Boolean,
-    messageSelector: Option[String],
     configuration: GatlingConfiguration,
 ) {
 
