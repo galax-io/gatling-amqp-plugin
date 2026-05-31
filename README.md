@@ -264,6 +264,8 @@ val amqpConf = amqp
 
 ### Consume
 
+Polls the queue for a message up to the specified timeout (default 5000ms). If no message arrives within the timeout, the action reports failure.
+
 ```scala
 amqp("consume").consume
   .queue("my-queue")
