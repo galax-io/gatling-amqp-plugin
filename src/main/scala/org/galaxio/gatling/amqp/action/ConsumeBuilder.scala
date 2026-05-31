@@ -20,6 +20,7 @@ case class ConsumeBuilder(attributes: ConsumeAttributes, configuration: GatlingC
     new Consume(
       attributes,
       amqpComponents,
+      coreComponents.actorSystem.scheduler,
       coreComponents.statsEngine,
       coreComponents.clock,
       next,
