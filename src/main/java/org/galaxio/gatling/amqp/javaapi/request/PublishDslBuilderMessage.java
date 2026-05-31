@@ -16,4 +16,12 @@ public class PublishDslBuilderMessage {
     public PublishDslBuilder textMessage(String text, Charset charset){
         return new PublishDslBuilder(wrapped.textMessage(toStringExpression(text), charset));
     }
+
+    public PublishDslBuilder bytesMessage(byte[] bytes){
+        return new PublishDslBuilder(wrapped.bytesMessage(toStaticValueExpression(bytes)));
+    }
+
+    public PublishDslBuilder bytesMessage(String el){
+        return new PublishDslBuilder(wrapped.bytesMessage(toBytesExpression(el)));
+    }
 }
