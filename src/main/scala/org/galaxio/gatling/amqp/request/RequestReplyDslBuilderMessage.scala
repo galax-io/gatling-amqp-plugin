@@ -11,7 +11,6 @@ case class RequestReplyDslBuilderMessage(
     destination: AmqpExchange,
     replyDest: AmqpExchange,
     setReplyTo: Boolean,
-    messageSelector: Option[String],
     configuration: GatlingConfiguration,
 ) {
 
@@ -30,7 +29,7 @@ case class RequestReplyDslBuilderMessage(
 
   private def message(mess: AmqpMessage) =
     RequestReplyDslBuilder(
-      AmqpAttributes(requestName, destination, messageSelector, mess),
+      AmqpAttributes(requestName, destination, mess),
       RequestReplyBuilder(_, replyDest, setReplyTo, configuration),
     )
 }

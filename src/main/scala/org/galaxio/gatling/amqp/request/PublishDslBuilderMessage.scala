@@ -19,7 +19,7 @@ case class PublishDslBuilderMessage(
 
   private def message(mess: AmqpMessage) =
     PublishDslBuilder(
-      AmqpAttributes(requestName, destination, None, mess),
+      AmqpAttributes(requestName, destination, mess),
       PublishBuilder(_, configuration),
     )
 

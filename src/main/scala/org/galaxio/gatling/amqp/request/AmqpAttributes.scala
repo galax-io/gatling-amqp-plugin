@@ -6,7 +6,6 @@ import org.galaxio.gatling.amqp.AmqpCheck
 case class AmqpAttributes(
     requestName: Expression[String],
     destination: AmqpExchange,
-    selector: Option[String],
     message: AmqpMessage,
     messageProperties: AmqpMessageProperties = AmqpMessageProperties(),
     checks: List[AmqpCheck] = Nil,

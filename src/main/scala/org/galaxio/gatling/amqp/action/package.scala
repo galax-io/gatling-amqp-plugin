@@ -12,7 +12,4 @@ package object action {
     }
   }
 
-  sealed trait Dest
-  case class DirectDest(exchName: String, rk: String) extends Dest
-  case class QueueDest(qName: String)                 extends Dest
 }
