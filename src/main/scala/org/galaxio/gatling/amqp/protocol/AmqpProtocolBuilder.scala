@@ -12,6 +12,7 @@ case class AmqpProtocolBuilder(
     replyTimeout: Option[Long] = None,
     responseTransformer: Option[AmqpProtocolMessage => AmqpProtocolMessage] = None,
     initActions: AmqpChannelInitActions = Nil,
+    replyInitActions: AmqpChannelInitActions = Nil,
     channelPoolSize: Int = 16,
     publisherConfirms: Boolean = false,
 ) {
@@ -50,6 +51,18 @@ case class AmqpProtocolBuilder(
   ): AmqpProtocolBuilder =
     this.copy(initActions = this.initActions :+ BindQueue(q.name, e.name, routingKey, args))
 
+  def replyDeclare(q: AmqpQueue): AmqpProtocolBuilder    = this.copy(replyInitActions = this.replyInitActions :+ QueueDeclare(q))
+  def replyDeclare(e: AmqpExchange): AmqpProtocolBuilder =
+    this.copy(replyInitActions = this.replyInitActions :+ ExchangeDeclare(e))
+
+  def replyBindQueue(
+      q: AmqpQueue,
+      e: AmqpExchange,
+      routingKey: String,
+      args: Map[String, Any] = Map.empty,
+  ): AmqpProtocolBuilder =
+    this.copy(replyInitActions = this.replyInitActions :+ BindQueue(q.name, e.name, routingKey, args))
+
   def build: AmqpProtocol =
     AmqpProtocol(
       requestConnectionFactory,
@@ -60,6 +73,7 @@ case class AmqpProtocolBuilder(
       messageMatcher,
       responseTransformer,
       initActions,
+      replyInitActions,
       channelPoolSize,
       publisherConfirms,
     )
