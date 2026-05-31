@@ -83,7 +83,9 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
         }
       }
 
-      for (MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent, onComplete) <- timedOutMessages) {
+      for (
+        MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent, onComplete) <- timedOutMessages
+      ) {
         sentMessages.remove(matchId)
         executeNext(
           session.markAsFailed,
