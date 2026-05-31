@@ -1,13 +1,12 @@
 package org.galaxio.gatling.amqp.examples.utils
 
 import com.rabbitmq.client._
-import com.typesafe.scalalogging.StrictLogging
 
 import java.nio.charset.StandardCharsets
 
 /** Simple RabbitMQClient which consumes messages from one broker and write them to other broker.
   */
-object SimpleRabbitMQClient extends StrictLogging {
+object SimpleRabbitMQClient {
   private val readQueue = "readQueue"
   private val readPort  = 5672
 
@@ -19,12 +18,9 @@ object SimpleRabbitMQClient extends StrictLogging {
   private var writeConnection: Connection = _
   private var writeChannel: Channel       = _
 
-  val deliverCallback: DeliverCallback = { (consumerTag: String, message: Delivery) =>
-    {
-      logger.debug("Received a message")
-      writeChannel.queueDeclare(writeQueue, true, false, false, null)
-      writeChannel.basicPublish("", writeQueue, message.getProperties, "Message processed".getBytes(StandardCharsets.UTF_8))
-    }
+  val deliverCallback: DeliverCallback = { (_: String, message: Delivery) =>
+    writeChannel.queueDeclare(writeQueue, true, false, false, null)
+    writeChannel.basicPublish("", writeQueue, message.getProperties, "Message processed".getBytes(StandardCharsets.UTF_8))
   }
 
   val cancelCallback: CancelCallback = (consumerTag: String) => {}
