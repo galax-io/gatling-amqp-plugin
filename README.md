@@ -59,13 +59,31 @@ gatling("org.galaxio:gatling-amqp-plugin_2.13:<version>")
 
 ## Quick Start
 
-### Docker (local RabbitMQ)
+### Prerequisites
+
+You need a running RabbitMQ instance. The examples below use `queueExchange("test-queue")`, which publishes directly to the default exchange with routing key `test-queue`. **The queue must exist before the test runs** — otherwise messages are silently dropped.
+
+### 1. Start RabbitMQ
 
 ```bash
 docker run -d --name gatling-rabbit \
   -p 5672:5672 -p 15672:15672 \
   rabbitmq:3-management
 ```
+
+The management UI is available at <http://localhost:15672> (guest/guest).
+
+### 2. Create the required queue
+
+Using the management CLI inside the container:
+
+```bash
+docker exec gatling-rabbit rabbitmqadmin declare queue name=test-queue durable=false
+```
+
+Alternatively, let the plugin declare the queue automatically — see [Queue and Exchange Declarations](#queue-and-exchange-declarations) below.
+
+### 3. Run the simulation
 
 ### Minimal Scenario — Scala
 
@@ -149,6 +167,49 @@ class AmqpSimulation : Simulation() {
   init { setUp(scn.injectOpen(atOnceUsers(1)).protocols(amqpConf)) }
 }
 ```
+
+### 4. Verify it worked
+
+After the simulation completes, confirm the message arrived in the queue:
+
+```bash
+# Check queue message count (should be 1 for atOnceUsers(1))
+docker exec gatling-rabbit rabbitmqadmin get queue=test-queue count=10
+```
+
+You should see the JSON payload `{"msg": "hello"}` in the output. If the queue was empty, the message was likely routed to a non-existent queue (check spelling) or the queue was not declared before the test.
+
+You can also verify via the management UI at <http://localhost:15672/#/queues/%2F/test-queue> — click "Get messages" to inspect the content.
+
+### 5. Request-Reply walkthrough
+
+A request-reply test publishes a message and waits for a response on a reply queue. For a quick local verification, start a simple consumer that echoes messages back:
+
+```bash
+# Create the request and reply queues
+docker exec gatling-rabbit rabbitmqadmin declare queue name=request-queue durable=false
+docker exec gatling-rabbit rabbitmqadmin declare queue name=reply-queue durable=false
+```
+
+Then run a tiny consumer (Python with pika, or any AMQP client) that reads from `request-queue` and publishes the reply to the queue specified in the message's `replyTo` property. For manual testing, you can use the [RabbitMQ Shovel plugin](https://www.rabbitmq.com/shovel.html) or a simple script.
+
+Scala simulation:
+
+```scala
+val scn = scenario("Request-Reply")
+  .exec(
+    amqp("rpc-call").requestReply
+      .queueExchange("request-queue")
+      .replyExchange("reply-queue")
+      .textMessage("""{"action": "ping"}""")
+      .contentType("application/json")
+      .check(bodyString.exists)
+  )
+
+setUp(scn.inject(atOnceUsers(1))).protocols(amqpConf)
+```
+
+If no consumer is running, the request will time out (default 30 s) and Gatling reports a failure — this confirms the round-trip is wired correctly.
 
 ## Protocol Configuration
 
