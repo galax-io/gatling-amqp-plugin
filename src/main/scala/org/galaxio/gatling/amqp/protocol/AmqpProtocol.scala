@@ -7,7 +7,6 @@ import io.gatling.core.CoreComponents
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.protocol.{Protocol, ProtocolKey}
 
-import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters._
 
 object AmqpProtocol {
@@ -16,52 +15,6 @@ object AmqpProtocol {
 
     override def defaultProtocolValue(configuration: GatlingConfiguration): AmqpProtocol =
       throw new IllegalStateException("Can't provide a default value for AmqpProtocol")
-
-    private val trackerPoolRef           = new AtomicReference[TrackerPool]()
-    private val connectionPublishPoolRef = new AtomicReference[AmqpConnectionPool]()
-    private val connectionReplyPoolRef   = new AtomicReference[AmqpConnectionPool]()
-
-    private def getOrCreateConnectionPublishPool(protocol: AmqpProtocol) = {
-      if (connectionPublishPoolRef.get() == null) {
-        connectionPublishPoolRef.lazySet(
-          new AmqpConnectionPool(
-            protocol.connectionFactory,
-            protocol.consumersThreadCount,
-            protocol.channelPoolSize,
-            protocol.publisherConfirms,
-          ),
-        )
-      }
-      connectionPublishPoolRef.get()
-    }
-
-    private def getOrCreateConnectionReplyPool(protocol: AmqpProtocol) = {
-      if (connectionReplyPoolRef.get() == null) {
-        connectionReplyPoolRef.lazySet(
-          new AmqpConnectionPool(
-            protocol.replyConnectionFactory,
-            protocol.consumersThreadCount,
-            protocol.channelPoolSize,
-            publisherConfirms = false,
-          ),
-        )
-      }
-      connectionReplyPoolRef.get()
-    }
-
-    private def getOrCreateTrackerPool(components: CoreComponents, pool: AmqpConnectionPool) = {
-      if (trackerPoolRef.get() == null) {
-        trackerPoolRef.lazySet(
-          new TrackerPool(
-            pool,
-            components.actorSystem,
-            components.statsEngine,
-            components.clock,
-          ),
-        )
-      }
-      trackerPoolRef.get()
-    }
 
     private def toJavaMap(map: Map[String, Any]): java.util.Map[String, Object] =
       map.asJava.asInstanceOf[java.util.Map[String, Object]]
@@ -78,9 +31,20 @@ object AmqpProtocol {
 
     override def newComponents(coreComponents: CoreComponents): AmqpProtocol => AmqpComponents =
       amqpProtocol => {
-        val requestPool = getOrCreateConnectionPublishPool(amqpProtocol)
+        val requestPool = new AmqpConnectionPool(
+          amqpProtocol.connectionFactory,
+          amqpProtocol.consumersThreadCount,
+          amqpProtocol.channelPoolSize,
+          amqpProtocol.publisherConfirms,
+        )
         coreComponents.actorSystem.registerOnTermination(requestPool.close())
-        val replyPool   = getOrCreateConnectionReplyPool(amqpProtocol)
+
+        val replyPool = new AmqpConnectionPool(
+          amqpProtocol.replyConnectionFactory,
+          amqpProtocol.consumersThreadCount,
+          amqpProtocol.channelPoolSize,
+          publisherConfirms = false,
+        )
         coreComponents.actorSystem.registerOnTermination(replyPool.close())
 
         if (amqpProtocol.initActions.nonEmpty) {
@@ -93,7 +57,13 @@ object AmqpProtocol {
           }
           requestPool.returnChannel(ch)
         }
-        val trackerPool = getOrCreateTrackerPool(coreComponents, replyPool)
+
+        val trackerPool = new TrackerPool(
+          replyPool,
+          coreComponents.actorSystem,
+          coreComponents.statsEngine,
+          coreComponents.clock,
+        )
         coreComponents.actorSystem.registerOnTermination(trackerPool.close())
 
         AmqpComponents(amqpProtocol, requestPool, replyPool, trackerPool)
