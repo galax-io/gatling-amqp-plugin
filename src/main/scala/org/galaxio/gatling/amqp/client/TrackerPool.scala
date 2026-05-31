@@ -84,8 +84,12 @@ class TrackerPool(
     pendingCounts.remove(sourceQueue)
     Option(consumerEntries.remove(sourceQueue)).foreach { entries =>
       entries.foreach { case (channel, tag) =>
-        Try(channel.basicCancel(tag))
-        Try(channel.close())
+        Try(channel.basicCancel(tag)).recover { case e =>
+          logger.debug(s"Failed to cancel consumer $tag: ${e.getMessage}")
+        }
+        Try(channel.close()).recover { case e =>
+          logger.debug(s"Failed to close channel for consumer $tag: ${e.getMessage}")
+        }
       }
     }
   }
@@ -94,8 +98,12 @@ class TrackerPool(
     import scala.jdk.CollectionConverters._
     consumerEntries.values().asScala.foreach { entries =>
       entries.foreach { case (channel, tag) =>
-        Try(channel.basicCancel(tag))
-        Try(channel.close())
+        Try(channel.basicCancel(tag)).recover { case e =>
+          logger.debug(s"Failed to cancel consumer $tag: ${e.getMessage}")
+        }
+        Try(channel.close()).recover { case e =>
+          logger.debug(s"Failed to close channel for consumer $tag: ${e.getMessage}")
+        }
       }
     }
     consumerEntries.clear()

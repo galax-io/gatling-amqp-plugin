@@ -70,7 +70,7 @@ class RequestReply(
         } catch {
           case e: Throwable =>
             trackerPool.decrementPendingAndEvict(qName)
-            logger.error(e.getMessage, e)
+            logger.error(s"Failed to send request-reply for '$requestNameString' (reply queue: $qName): ${e.getMessage}", e)
             if (!attributes.silent)
               statsEngine.logResponse(
                 session.scenario,
