@@ -51,6 +51,8 @@ class Publish(
             Some("500"),
             Some(e.getMessage),
           )
+        next ! session.markAsFailed
+        return
     }
     next ! session
   }
