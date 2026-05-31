@@ -85,7 +85,7 @@ Alternatively, let the plugin declare the queue automatically — see [Queue and
 
 ### 3. Run the simulation
 
-### Minimal Scenario — Scala
+#### Scala
 
 ```scala
 import org.galaxio.gatling.amqp.Predef._
@@ -116,7 +116,7 @@ class AmqpSimulation extends Simulation {
 }
 ```
 
-### Minimal Scenario — Java
+#### Java
 
 ```java
 import static org.galaxio.gatling.amqp.javaapi.AmqpDsl.*;
@@ -142,7 +142,7 @@ public class AmqpSimulation extends Simulation {
 }
 ```
 
-### Minimal Scenario — Kotlin
+#### Kotlin
 
 ```kotlin
 import org.galaxio.gatling.amqp.javaapi.AmqpDsl.*
@@ -173,7 +173,10 @@ class AmqpSimulation : Simulation() {
 After the simulation completes, confirm the message arrived in the queue:
 
 ```bash
-# Check queue message count (should be 1 for atOnceUsers(1))
+# Purge any old messages first, then run the simulation
+docker exec gatling-rabbit rabbitmqadmin purge queue name=test-queue
+
+# After the test, check the queue
 docker exec gatling-rabbit rabbitmqadmin get queue=test-queue count=10
 ```
 
@@ -183,7 +186,7 @@ You can also verify via the management UI at <http://localhost:15672/#/queues/%2
 
 ### 5. Request-Reply walkthrough
 
-A request-reply test publishes a message and waits for a response on a reply queue. For a quick local verification, start a simple consumer that echoes messages back:
+A request-reply test publishes a message and waits for a response on a reply queue.
 
 ```bash
 # Create the request and reply queues
@@ -191,11 +194,36 @@ docker exec gatling-rabbit rabbitmqadmin declare queue name=request-queue durabl
 docker exec gatling-rabbit rabbitmqadmin declare queue name=reply-queue durable=false
 ```
 
-Then run a tiny consumer (Python with pika, or any AMQP client) that reads from `request-queue` and publishes the reply to the queue specified in the message's `replyTo` property. For manual testing, you can use the [RabbitMQ Shovel plugin](https://www.rabbitmq.com/shovel.html) or a simple script.
+Start a simple echo consumer that reads from `request-queue` and replies to the queue in the message's `replyTo` property:
+
+```bash
+# Python echo consumer (requires pika: pip install pika)
+docker exec -d gatling-rabbit bash -c '
+pip install pika -q && python3 -c "
+import pika, json
+conn = pika.BlockingConnection(pika.ConnectionParameters(\"localhost\"))
+ch = conn.channel()
+def on_msg(channel, method, props, body):
+    ch.basic_publish(exchange=\"\", routing_key=props.reply_to,
+                     properties=pika.BasicProperties(correlation_id=props.message_id),
+                     body=body)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+ch.basic_consume(queue=\"request-queue\", on_message_callback=on_msg)
+ch.start_consuming()
+"'
+```
 
 Scala simulation:
 
 ```scala
+val amqpConf = amqp
+  .connectionFactory(
+    rabbitmq.host("localhost").port(5672).username("guest").password("guest").vhost("/")
+  )
+  .replyTimeout(60000)
+  .consumerThreadsCount(8)
+  .matchByMessageId
+
 val scn = scenario("Request-Reply")
   .exec(
     amqp("rpc-call").requestReply
@@ -209,7 +237,7 @@ val scn = scenario("Request-Reply")
 setUp(scn.inject(atOnceUsers(1))).protocols(amqpConf)
 ```
 
-If no consumer is running, the request will time out (default 30 s) and Gatling reports a failure — this confirms the round-trip is wired correctly.
+If no consumer is running, the request will time out (default 60 s per `replyTimeout`) and Gatling reports a KO — this confirms the round-trip is wired correctly.
 
 ## Protocol Configuration
 
