@@ -2,7 +2,7 @@ package org.galaxio.gatling.amqp.action
 
 import io.gatling.commons.stats.KO
 import io.gatling.commons.util.Clock
-import io.gatling.commons.validation.Validation
+import io.gatling.commons.validation.{Failure, Success, Validation}
 import io.gatling.core.action.Action
 import io.gatling.core.actor.ActorRef
 import io.gatling.core.controller.throttle.Throttler
@@ -39,48 +39,65 @@ class RequestReply(
       session: Session,
       publisher: AmqpPublisher,
   ): Unit =
-    resolveDestination(replyDestination, session).map { qName =>
-      val trackerPool = components.trackerPool
-      val tracker     = trackerPool.tracker(
-        qName,
-        components.protocol.consumersThreadCount,
-        components.protocol.messageMatcher,
-        components.protocol.responseTransformer,
-      )
-      trackerPool.incrementPending(qName)
-      val id          = components.protocol.messageMatcher.requestMatchId(msg)
-      val now         = clock.nowMillis
-      try {
-        publisher.publish(msg, session)
-        if (logger.underlying.isDebugEnabled) {
-          logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
-        }
-        tracker.track(
-          id,
-          clock.nowMillis,
-          replyTimeout,
-          attributes.checks,
-          session,
-          next,
-          requestNameString,
-          attributes.silent,
-          onComplete = Some(() => trackerPool.decrementPendingAndEvict(qName)),
+    resolveDestination(replyDestination, session) match {
+      case Success(qName)        =>
+        val trackerPool = components.trackerPool
+        val tracker     = trackerPool.tracker(
+          qName,
+          components.protocol.consumersThreadCount,
+          components.protocol.messageMatcher,
+          components.protocol.responseTransformer,
         )
-      } catch {
-        case e: Throwable =>
-          trackerPool.decrementPendingAndEvict(qName)
-          logger.error(e.getMessage, e)
-          if (!attributes.silent)
-            statsEngine.logResponse(
-              session.scenario,
-              session.groups,
-              requestNameString,
-              now,
-              clock.nowMillis,
-              KO,
-              Some("500"),
-              Some(e.getMessage),
-            )
-      }
+        trackerPool.incrementPending(qName)
+        val id          = components.protocol.messageMatcher.requestMatchId(msg)
+        val now         = clock.nowMillis
+        try {
+          publisher.publish(msg, session)
+          if (logger.underlying.isDebugEnabled) {
+            logMessage(s"Message sent user=${session.userId} AMQPMessageID=${msg.messageId}", msg)
+          }
+          tracker.track(
+            id,
+            clock.nowMillis,
+            replyTimeout,
+            attributes.checks,
+            session,
+            next,
+            requestNameString,
+            attributes.silent,
+            onComplete = Some(() => trackerPool.decrementPendingAndEvict(qName)),
+          )
+        } catch {
+          case e: Throwable =>
+            trackerPool.decrementPendingAndEvict(qName)
+            logger.error(e.getMessage, e)
+            if (!attributes.silent)
+              statsEngine.logResponse(
+                session.scenario,
+                session.groups,
+                requestNameString,
+                now,
+                clock.nowMillis,
+                KO,
+                Some("500"),
+                Some(e.getMessage),
+              )
+            next ! session.markAsFailed
+        }
+      case Failure(errorMessage) =>
+        val now = clock.nowMillis
+        logger.error(s"Failed to resolve reply destination: $errorMessage")
+        if (!attributes.silent)
+          statsEngine.logResponse(
+            session.scenario,
+            session.groups,
+            requestNameString,
+            now,
+            clock.nowMillis,
+            KO,
+            Some("500"),
+            Some(errorMessage),
+          )
+        next ! session.markAsFailed
     }
 }
