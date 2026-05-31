@@ -12,6 +12,8 @@ import org.galaxio.gatling.amqp.AmqpCheck
 import org.galaxio.gatling.amqp.client.AmqpMessageTrackerActor.{MessageConsumed, MessagePublished, TimeoutScan}
 import org.galaxio.gatling.amqp.request.AmqpProtocolMessage
 
+import com.typesafe.scalalogging.StrictLogging
+
 import scala.collection.mutable
 import scala.concurrent.duration._
 
@@ -41,7 +43,7 @@ object AmqpMessageTrackerActor {
 }
 
 class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clock)
-    extends Actor[AmqpMessageTrackerActor.AmqpMessage](name) {
+    extends Actor[AmqpMessageTrackerActor.AmqpMessage](name) with StrictLogging {
 
   private val sentMessages                 = mutable.HashMap.empty[String, MessagePublished]
   private val timedOutMessages             = mutable.ArrayBuffer.empty[MessagePublished]
@@ -67,10 +69,12 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
     // message was received; publish stats and remove from the map
     case MessageConsumed(matchId, received, message) =>
       // if key is missing, message was already acked and is a dup, or request timeout
-      sentMessages.remove(matchId).foreach {
-        case MessagePublished(_, sent, _, checks, session, next, requestName, silent, onComplete) =>
+      sentMessages.remove(matchId) match {
+        case Some(MessagePublished(_, sent, _, checks, session, next, requestName, silent, onComplete)) =>
           processMessage(session, sent, received, checks, message, next, requestName, silent)
           onComplete.foreach(_())
+        case None                                                                                       =>
+          logger.debug(s"Received reply for unknown or already-handled matchId: $matchId")
       }
       stay
 
@@ -84,9 +88,11 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
       }
 
       for (
-        MessagePublished(matchId, sent, receivedTimeout, _, session, next, requestName, silent, onComplete) <- timedOutMessages
+        MessagePublished(matchId, sent, replyTimeout, _, session, next, requestName, silent, onComplete) <- timedOutMessages
       ) {
+        val elapsed = now - sent
         sentMessages.remove(matchId)
+        logger.debug(s"Reply timeout for matchId=$matchId after ${elapsed}ms (request: $requestName)")
         executeNext(
           session.markAsFailed,
           sent,
@@ -95,7 +101,7 @@ class AmqpMessageTrackerActor(name: String, statsEngine: StatsEngine, clock: Clo
           next,
           requestName,
           None,
-          Some(s"Reply timeout after $receivedTimeout ms"),
+          Some(s"Reply timeout after ${elapsed}ms (limit: ${replyTimeout}ms)"),
           silent,
         )
         onComplete.foreach(_())

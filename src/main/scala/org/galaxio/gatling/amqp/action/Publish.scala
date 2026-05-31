@@ -40,7 +40,7 @@ class Publish(
       next ! session
     } catch {
       case e: Throwable =>
-        logger.error(e.getMessage, e)
+        logger.error(s"Failed to publish message for request '$requestNameString': ${e.getMessage}", e)
         if (!attributes.silent)
           statsEngine.logResponse(
             session.scenario,
