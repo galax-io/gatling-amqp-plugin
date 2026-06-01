@@ -1,6 +1,7 @@
 package org.galaxio.gatling.amqp.client
 
 import com.rabbitmq.client.{AlreadyClosedException, Channel, ShutdownSignalException}
+import io.gatling.commons.validation.{Failure, Success}
 import io.gatling.core.session.Session
 import org.galaxio.gatling.amqp.protocol.AmqpComponents
 import org.galaxio.gatling.amqp.request._
@@ -41,11 +42,14 @@ class AmqpPublisher(destination: AmqpExchange, components: AmqpComponents) {
           exKey  <- routingKey(session)
         } yield (exName, exKey)
     }
-    resolved.foreach { case (exName, exKey) =>
-      withChannel { channel =>
-        channel.basicPublish(exName, exKey, message.amqpProperties, message.payload)
-        if (awaitConfirm) channel.waitForConfirmsOrDie(5000)
-      }
+    resolved match {
+      case Success((exName, exKey)) =>
+        withChannel { channel =>
+          channel.basicPublish(exName, exKey, message.amqpProperties, message.payload)
+          if (awaitConfirm) channel.waitForConfirmsOrDie(5000)
+        }
+      case Failure(errorMessage)    =>
+        throw new IllegalStateException(s"Failed to resolve AMQP destination: $errorMessage")
     }
   }
 }
