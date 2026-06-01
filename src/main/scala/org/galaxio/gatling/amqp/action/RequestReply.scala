@@ -10,7 +10,7 @@ import io.gatling.core.session.Session
 import io.gatling.core.stats.StatsEngine
 import org.galaxio.gatling.amqp.client.AmqpPublisher
 import org.galaxio.gatling.amqp.protocol.AmqpComponents
-import org.galaxio.gatling.amqp.request.{AmqpAttributes, AmqpProtocolMessage, _}
+import org.galaxio.gatling.amqp.request._
 
 class RequestReply(
     attributes: AmqpAttributes,

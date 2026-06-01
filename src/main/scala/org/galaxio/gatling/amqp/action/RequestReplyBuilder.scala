@@ -7,7 +7,6 @@ import io.gatling.core.action.builder.ActionBuilder
 import io.gatling.core.config.GatlingConfiguration
 import io.gatling.core.protocol.ProtocolComponentsRegistry
 import io.gatling.core.structure.ScenarioContext
-import org.galaxio.gatling.amqp.request.AmqpAttributes
 
 case class RequestReplyBuilder(
     attributes: AmqpAttributes,
