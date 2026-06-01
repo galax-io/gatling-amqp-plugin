@@ -6,7 +6,7 @@ AMQP/RabbitMQ protocol plugin for Gatling. Published library — treat all publi
 Principal Engineer in software development and performance testing. Strong Scala, Java, Kotlin, Gatling plugin, and AMQP/RabbitMQ expertise. Prefer small, clear, backward-compatible changes unless the task explicitly requires otherwise.
 
 ## Stack
-- Scala 2.13, SBT, Gatling 3.13.5, Java 17+
+- Scala 2.13, SBT 1.12.11, Gatling 3.13.5, Java 17+
 - AMQP/RabbitMQ plugin: publish, request-reply, and consume flows
 - Java API facade with Kotlin-compatible usage and tests
 - RabbitMQ Java client, Testcontainers RabbitMQ, Codecov, Sonatype

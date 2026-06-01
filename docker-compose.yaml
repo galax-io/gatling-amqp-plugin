@@ -1,8 +1,6 @@
-version: "3"
-
 services:
   rabbit1:
-    image: rabbitmq:3.13.7-management
+    image: rabbitmq:4.1.8-management
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
@@ -12,7 +10,7 @@ services:
     - 5672:5672
     - 15672:15672
   rabbit2:
-    image: rabbitmq:3.13.7-management
+    image: rabbitmq:4.1.8-management
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
