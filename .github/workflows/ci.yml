@@ -28,16 +28,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: sbt
       - uses: sbt/setup-sbt@v1
       - name: Cache Coursier
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v7
       - name: Scalafmt Check
         run: sbt scalafmtCheckAll scalafmtSbtCheck
 
@@ -47,9 +47,9 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Dependency Review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
 
   test:
     name: Test (Java ${{ matrix.java }})
@@ -63,7 +63,7 @@ jobs:
         java: ['17', '21']
     services:
       rabbitmq:
-        image: rabbitmq:3.13.7-management-alpine
+        image: rabbitmq:4.1.8-management-alpine
         env:
           RABBITMQ_DEFAULT_USER: rabbitmq
           RABBITMQ_DEFAULT_PASS: rabbitmq
@@ -75,20 +75,20 @@ jobs:
           --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Java (Temurin ${{ matrix.java }})
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
           cache: sbt
       - uses: sbt/setup-sbt@v1
       - name: Cache Coursier
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v7
       - name: Cache Ivy/SBT
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.ivy2/cache
@@ -104,7 +104,7 @@ jobs:
         run: sbt "Gatling / testOnly org.galaxio.gatling.amqp.examples.AmqpGatlingTest"
       - name: Upload coverage reports to Codecov
         if: matrix.java == '17'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: false
 
@@ -117,7 +117,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Compute next version & create tag
@@ -187,11 +187,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup Java (Temurin 17) with sbt cache
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -199,9 +199,9 @@ jobs:
       - name: Setup sbt
         uses: sbt/setup-sbt@v1
       - name: Cache Coursier
-        uses: coursier/cache-action@v6
+        uses: coursier/cache-action@v7
       - name: Cache Ivy/SBT
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.ivy2/cache
@@ -241,7 +241,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body: ${{ steps.changelog.outputs.changelog }}
         env:
