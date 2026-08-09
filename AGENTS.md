@@ -64,7 +64,7 @@ class AmqpPublisher { val channel = new AmqpChannelPool(); ... }
 3. Keep commits semantic and green.
 4. Prefer rebase-oriented history; avoid merge commits in PR branches.
 5. CI in `.github/workflows/ci.yml` checks formatting, compile, tests, and coverage.
-6. Releases are driven by pushes to `main` and tags `v*`.
+6. Releases are manual and tag-driven: push a `vX.Y.Z` tag on `main` or `release/*` and `.github/workflows/release.yml` publishes to Sonatype and cuts the GitHub Release. Merging to `main` does not release. The tag must be pushed by a human — GitHub does not start workflow runs for refs pushed with `GITHUB_TOKEN`, so a CI-created tag would never trigger the release.
 
 ## Repo Notes
 - `build.sbt`, `project/Dependencies.scala`, and `project/plugins.sbt` are the source of truth for build and dependency behavior.
