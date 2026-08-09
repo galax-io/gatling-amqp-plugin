@@ -8,3 +8,10 @@
 /target/
 /.bsp
 /results
+
+### IDE / build server artifacts (machine-local, auto-generated)
+/.bloop/
+/project/.bloop/
+/.metals/
+/project/metals.sbt
+/.mcp.json
