@@ -1,7 +1,7 @@
 import Dependencies.*
 
 lazy val root = (project in file("."))
-  .enablePlugins(GitVersioning, GatlingPlugin)
+  .enablePlugins(GatlingPlugin)
   .settings(
     name                        := "gatling-amqp-plugin",
     scalaVersion                := "2.13.18",
