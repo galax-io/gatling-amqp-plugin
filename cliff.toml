@@ -43,6 +43,9 @@ commit_parsers = [
   { message = "^perf", group = "<!-- 03 -->Performance" },
   { message = "^docs", group = "<!-- 04 -->Documentation" },
   { message = "^chore\\(deps\\)", group = "<!-- 05 -->Dependencies" },
+  # Scala Steward writes "Update <artifact> to <version>", which is not a Conventional
+  # Commit and would otherwise fall through to the catch-all and render under "Other".
+  { message = "^Update .+ to ", group = "<!-- 05 -->Dependencies" },
   { message = "^(refactor|test|ci|build|chore|style|revert)", group = "<!-- 06 -->Maintenance" },
   # Catch-all: a non-Conventional-Commit message still ships (e.g. an older or squash-merged commit)
   # instead of silently vanishing from the notes.
