@@ -4,7 +4,7 @@ lazy val root = (project in file("."))
   .enablePlugins(GatlingPlugin)
   .settings(
     name                        := "gatling-amqp-plugin",
-    scalaVersion                := "2.13.18",
+    scalaVersion                := "3.9.0",
     // Do not publish Gatling/GatlingIt configuration artifacts (prevents enterprisePackage on CI)
     Gatling / publishArtifact   := false,
     GatlingIt / publishArtifact := false,
