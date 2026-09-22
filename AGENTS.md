@@ -70,3 +70,12 @@ class AmqpPublisher { val channel = new AmqpChannelPool(); ... }
 - `build.sbt`, `project/Dependencies.scala`, and `project/plugins.sbt` are the source of truth for build and dependency behavior.
 - Changes in `client/`, channel tracking, or action execution can affect both correctness and observability under load.
 - Real RabbitMQ behavior is usually more valuable than mocks here.
+- Three git tags were never published to Maven Central and have no corresponding
+  artifact: `v0.12.1`, `v0.13.0-latest`, `v1.0.5`. Each is superseded by a real
+  published version immediately after it in sequence (`v0.14.0`, `v0.13.0`, and
+  `v1.0.6` respectively -- `v1.0.6` shares `v1.0.5`'s exact source commit).
+  These are historical gaps from the old main-push-triggered release mechanism
+  and the tag/publish split it was later replaced with (see #76); do not treat
+  them as installable versions, and do not attempt to republish them -- Maven
+  Central publishes are immutable, and republishing against a year-plus-old
+  commit risks an artifact built against stale dependency resolutions.
