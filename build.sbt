@@ -8,6 +8,8 @@ lazy val root = (project in file("."))
     // Do not publish Gatling/GatlingIt configuration artifacts (prevents enterprisePackage on CI)
     Gatling / publishArtifact   := false,
     GatlingIt / publishArtifact := false,
+    // Binary-compatibility check against the latest published release.
+    mimaPreviousArtifacts       := Set(organization.value %% name.value % "1.3.0"),
     libraryDependencies ++= gatling ++ gatlingCore,
     libraryDependencies ++= Seq(
       rabbitmq,
