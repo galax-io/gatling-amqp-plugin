@@ -1,0 +1,11 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: gatling-amqp-plugin
+  description: AMQP protocol plugin for Gatling load testing, supporting publish, request-reply, and consume flows with connection pooling
+  annotations:
+    github.com/project-slug: galax-io/gatling-amqp-plugin
+spec:
+  type: library
+  lifecycle: production
+  owner: galaxio
