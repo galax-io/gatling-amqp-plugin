@@ -25,6 +25,7 @@ jobs:
   format:
     name: Check Formatting
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -44,6 +45,7 @@ jobs:
     name: Dependency Review
     runs-on: ubuntu-24.04
     if: github.event_name == 'pull_request'
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -57,6 +59,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+    timeout-minutes: 20
     strategy:
       matrix:
         java: ['17', '21']
@@ -97,6 +100,8 @@ jobs:
           restore-keys: sbt-${{ runner.os }}-java${{ matrix.java }}-
       - name: Compile
         run: sbt clean compile
+      - name: Binary compatibility (MiMa)
+        run: sbt mimaReportBinaryIssues
       - name: Unit Tests with Coverage
         run: sbt coverage test coverageReport coverageOff
       - name: Integration Tests (Gatling)

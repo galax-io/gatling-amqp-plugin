@@ -27,10 +27,7 @@ AMQP protocol plugin for [Gatling](https://gatling.io/) load testing framework. 
 
 | Plugin Version | Gatling | Scala | Java |
 |---|---|---|---|
-| 0.x.y-latest | 3.13.x | 2.13 | 17+ |
-| 0.x.y | 3.11.x | 2.13 | 17+ |
-
-> **Branch strategy:** `main` targets Gatling 3.11.x, `latest/gatling` targets Gatling 3.13.x.
+| 1.3.0 (latest) | 3.13.x | 2.13 | 17+ |
 
 ## Installation
 
