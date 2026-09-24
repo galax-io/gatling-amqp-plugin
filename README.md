@@ -472,6 +472,9 @@ val amqpConf = amqp
 
 ## Contributing
 
+The build runs on sbt 2.0.9 (pinned in `project/build.properties`), which needs JDK 17 or newer.
+The published artifacts are still built for Scala 2.13.
+
 ```bash
 # Build
 sbt compile

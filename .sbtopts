@@ -1,0 +1,3 @@
+# sbt 2 starts the thin client by default, which rejects several commands in one
+# invocation (`sbt clean compile test`); run the build in the launcher's JVM instead.
+--server
