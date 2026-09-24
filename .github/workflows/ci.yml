@@ -87,19 +87,16 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: sbt
       - uses: sbt/setup-sbt@v1
+      # Only dependency caches are restored. sbt 2 caches task results in
+      # ~/.cache/sbt and runs tests incrementally, so neither that cache nor
+      # target/ may come back from an earlier run, or tests could be skipped.
       - name: Cache Coursier
         uses: coursier/cache-action@v8
-      - name: Cache Ivy/SBT
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.ivy2/cache
-            ~/.sbt
-            ~/.cache/coursier
-          key: sbt-${{ runner.os }}-java${{ matrix.java }}-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/**') }}
-          restore-keys: sbt-${{ runner.os }}-java${{ matrix.java }}-
+      - name: Discard sbt 2 task cache
+        run: rm -rf ~/.cache/sbt target project/target
       - name: Compile
         run: sbt clean compile
+      # Blocking check against 1.3.0, run by the sbt 2 build of sbt-mima-plugin.
       - name: Binary compatibility (MiMa)
         run: sbt mimaReportBinaryIssues
       - name: Unit Tests with Coverage
@@ -110,4 +107,14 @@ jobs:
         if: matrix.java == '17'
         uses: codecov/codecov-action@v7
         with:
+          files: target/out/jvm/scala-2.13.18/gatling-amqp-plugin/scoverage-report/scoverage.xml
           fail_ci_if_error: false
+
+  sbt-upgrade-parity:
+    name: sbt Upgrade Parity
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    uses: galax-io/gatling-picatinny/.github/workflows/sbt-upgrade-parity.yml@4a4d8413b0a593927efc560198da3452fecee8cd
+    with:
+      mode: library

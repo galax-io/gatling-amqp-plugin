@@ -42,7 +42,7 @@ is prepared (plan.md, "Delivery order").
 
 ## gatling-amqp-plugin
 
-- [ ] T-005 [repo:galax-io/gatling-amqp-plugin] [US1] Move the build to sbt 2.0.9 and call the parity gate (`project/build.properties`, `build.sbt`, `.github/workflows/ci.yml`)
+- [x] T-005 [repo:galax-io/gatling-amqp-plugin] [US1] Move the build to sbt 2.0.9 and call the parity gate (`project/build.properties`, `build.sbt`, `.github/workflows/ci.yml`)
   AC: `project/build.properties` pins exactly `sbt.version=2.0.9`; plugins, library dependencies and Scala 2.13.18 stay as they are.
   AC: `build.sbt` loads on sbt 2: URI-typed keys, `Seq[License]`, scoped bare settings, and `Def.uncached` where a task result has no JsonFormat.
   AC: `.github/workflows/ci.yml` keeps the Java 17 and 21 matrix on sbt 2.0.9, keeps `mimaReportBinaryIssues` against 1.3.0 blocking under the sbt 2 MiMa plugin, uses the new `target/` layout, and restores no sbt 2 task cache or `target/` directory.
