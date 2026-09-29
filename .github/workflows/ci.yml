@@ -36,6 +36,8 @@ jobs:
           java-version: '17'
           cache: sbt
       - uses: sbt/setup-sbt@v1
+        with:
+          disk-cache: false # FR-007: never restore the sbt 2 task cache
       - name: Cache Coursier
         uses: coursier/cache-action@v8
       - name: Scalafmt Check
@@ -87,6 +89,8 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: sbt
       - uses: sbt/setup-sbt@v1
+        with:
+          disk-cache: false # FR-007: never restore the sbt 2 task cache
       # Only dependency caches are restored. sbt 2 caches task results in
       # ~/.cache/sbt and runs tests incrementally, so neither that cache nor
       # target/ may come back from an earlier run, or tests could be skipped.
