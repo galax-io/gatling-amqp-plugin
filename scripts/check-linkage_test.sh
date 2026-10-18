@@ -42,7 +42,11 @@ cat > "$bin/gh" <<'STUB'
 fx="${FIXTURES:?}"
 unexpected() { echo "gh $*" >> "$fx/unexpected.log"; echo "stub gh: unexpected call: gh $*" >&2; exit 99; }
 all="$*"
+echo "GH_TOKEN=${GH_TOKEN:-} gh $all" >> "$fx/ghcalls.log"
 cmd="${1:-}"; [ $# -gt 0 ] && shift
+# a private backlog: only its own token reads it (fixture file backlog-hidden)
+backlog_denied() { [ -e "$fx/backlog-hidden" ] && [ "${GH_TOKEN:-}" != "backlog-secret" ]; }
+not_found() { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
 expr=""; paginate=0; repo=""; positional=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -67,6 +71,9 @@ case "$cmd" in
         echo '[{"number":7,"title":"v0.7.0"},{"number":8,"title":"v0.8.0"}]' ;;
       "repos/$REPO")
         echo '{"default_branch":"main"}' | jq -r "${expr:-.}" ;;
+      "repos/$BACKLOG_REPO")
+        backlog_denied && not_found
+        echo '{"private":true}' ;;
       "repos/$REPO/milestones/8")
         echo '{"title":"v0.8.0","state":"open"}' ;;
       "repos/$REPO/issues?milestone=8&state=all&per_page=100")
@@ -78,6 +85,7 @@ case "$cmd" in
     [ "${positional[0]:-}" = view ] && [ "$repo" = "$REPO" ] && [ -f "$fx/pr-${positional[1]:-}.json" ] || unexpected "$all"
     reply "$fx/pr-${positional[1]}.json" ;;
   issue)
+    [ "$repo" = "$BACKLOG_REPO" ] && backlog_denied && not_found
     f="$fx/issue-${repo//\//_}-${positional[1]:-}.json"
     [ "${positional[0]:-}" = view ] && [ -f "$f" ] || unexpected "$all"
     reply "$f" ;;
@@ -102,8 +110,9 @@ add_issue() { # number, state (open|closed) — an issue of this repository in v
   issue_in "$REPO" "$1" v0.8.0
 }
 pr_json() { # number, state (OPEN|CLOSED|MERGED), closing link owner/repo#N or "", body, milestone title or "", [base branch]
-  jq -nc --argjson n "$1" --arg state "$2" --arg link "$3" --arg body "$4" --arg ms "$5" --arg base "${6:-main}" '{
+  jq -nc --argjson n "$1" --arg state "$2" --arg link "$3" --arg body "$4" --arg ms "$5" --arg base "${6:-main}" --arg author "${PR_AUTHOR:-jigarkhwar}" --arg bot "${PR_BOT:-0}" --arg head "${PR_HEAD:-feat/x}" '{
     number: $n, title: "PR \($n)", state: $state, body: $body, baseRefName: $base,
+    author: {login: $author, is_bot: ($bot == "1")}, headRefName: $head,
     milestone: (if $ms == "" then null else {title: $ms} end),
     closingIssuesReferences: [$link | select(. != "")
       | capture("^(?<owner>[^/]+)/(?<name>[^#]+)#(?<n>[0-9]+)$")
@@ -116,7 +125,11 @@ add_pr() { # number, state, closing link or "", [body] — a PR in v0.8.0
   printf '{"number":%s,"state":"%s","pull_request":{}}\n' "$1" "$rest" >> "$fx/items.ndjson"
   pr_json "$1" "$2" "$3" "${4:-}" v0.8.0
 }
-run() { # the script's arguments; sets $out and $rc
+run() { # the script's arguments; sets $out and $rc. The cases above 26 test the other rules, so the
+        # requirement of a feature link is off for them; cases 26 and up use run_strict.
+  out="$(PATH="$bin:$PATH" REPO="$REPO" BACKLOG_REPO="$BACKLOG" FEATURE_LINK=optional FIXTURES="$fx" bash "$script" "$@" 2>&1)"; rc=$?
+}
+run_strict() { # as run, with the requirement of a feature link in force (the default)
   out="$(PATH="$bin:$PATH" REPO="$REPO" BACKLOG_REPO="$BACKLOG" FIXTURES="$fx" bash "$script" "$@" 2>&1)"; rc=$?
 }
 has() { grep -qF -- "$1" <<<"$out"; }
@@ -343,6 +356,106 @@ issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
 run --tag
 check "tag: a merged PR that links a feature does not block the tag" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
 check "tag: the milestone is tag-ready" $(has 'Milestone #8 is tag-ready.' && echo 0 || echo 1) "out=$out"
+
+# 26. gate: every PR links a feature of the backlog; a technical PR with no link fails
+new_case strict-none
+pr_json 3 OPEN "" "Bumps the pins." v0.8.0
+run_strict --pr 3
+check "strict: a PR with no link to a feature fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: it says which link to add" $(has "✗ links no feature of the backlog" && has "Part of $BACKLOG#" && echo 0 || echo 1) "out=$out"
+check "strict: maintenance is pointed at the standing feature by its label, not by a title" $(has 'label standing' && ! has 'Maintenance and tech debt' && echo 0 || echo 1) "out=$out"
+
+# 27. gate: Part of a feature passes, the PR needs no issue of its own
+new_case strict-feature
+pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run_strict --pr 3
+check "strict: Part of a feature passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: the feature is named" $(has "✓ links $BACKLOG#30 (feature of business milestone" && echo 0 || echo 1) "out=$out"
+
+# 28. gate: a closing link to an issue of this repository plus Part of a feature: the feature is seen
+new_case strict-closes-and-part
+pr_json 3 OPEN "$REPO#1" $'Closes #1\nPart of '"$BACKLOG"'#30' v0.8.0
+issue_in "$REPO" 1 v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run_strict --pr 3
+check "strict: a closing link does not hide the Part of a feature" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: the feature is reported" $(has "$BACKLOG#30" && has 'feature of business milestone' && echo 0 || echo 1) "out=$out"
+check "strict: the closed issue is still checked" $(has "✓ links $REPO#1 (same milestone)" && echo 0 || echo 1) "out=$out"
+
+# 29. gate: a backlog issue that is not a feature does not satisfy the requirement
+new_case strict-not-feature
+pr_json 3 OPEN "" "Part of $BACKLOG#31" v0.8.0
+issue_in "$BACKLOG" 31 'v0.8.0' 'Tooling of the backlog itself.'
+run_strict --pr 3
+check "strict: Part of a backlog issue in an ordinary milestone is no feature" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: it still asks for a feature" $(has "✗ links no feature of the backlog" && echo 0 || echo 1) "out=$out"
+
+# 30. gate: a bot's PR is exempt (author is a bot, or Dependabot's or Scala Steward's branch)
+new_case strict-bot
+PR_AUTHOR='dependabot[bot]' PR_BOT=1 pr_json 3 OPEN "" "Bumps a library." v0.8.0
+run_strict --pr 3
+check "strict: a bot's PR needs no feature" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: it says why" $(has 'bot' && has 'needs no feature' && echo 0 || echo 1) "out=$out"
+new_case strict-steward
+PR_HEAD='update/scalafmt-core-3.9.0' pr_json 3 OPEN "" "Update scalafmt-core to 3.9.0" v0.8.0
+run_strict --pr 3
+check "strict: a Scala Steward branch is exempt" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-human-update
+PR_HEAD='feat/not-a-bot' pr_json 3 OPEN "" "Update the docs" v0.8.0
+run_strict --pr 3
+check "strict: a human's branch is not exempt" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 31. gate: the backlog's own PRs link nothing above them
+new_case strict-backlog-itself
+pr_json 3 OPEN "" "Adds a script." v0.8.0
+out="$(PATH="$bin:$PATH" REPO="$BACKLOG" BACKLOG_REPO="$BACKLOG" FIXTURES="$fx" bash "$script" --pr 3 2>&1)"; rc=$?
+check "strict: a PR in the backlog repository itself needs no feature" $([ "$rc" -ne 1 ] && ! has 'links no feature' && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 32. audit: a PR of the milestone without a feature link is a warning, not an error
+new_case strict-audit
+add_issue 1 open
+add_pr 2 OPEN "$REPO#1"
+add_pr 3 OPEN "" "Bumps the pins."
+run_strict
+check "strict audit: a PR without a feature is a warning" $([ "$rc" -eq 0 ] && has '! PR #3' && has 'links no feature of the backlog' && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 33. the requirement can be switched off by name only
+new_case strict-optional
+pr_json 3 OPEN "" "Bumps the pins." v0.8.0
+run --pr 3
+check "optional: FEATURE_LINK=optional lets a PR without a feature pass" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+out="$(PATH="$bin:$PATH" REPO="$REPO" BACKLOG_REPO="$BACKLOG" FEATURE_LINK=nonsense FIXTURES="$fx" bash "$script" --pr 3 2>&1)"; rc=$?
+check "optional: an unknown FEATURE_LINK value is refused" $([ "$rc" -eq 2 ] && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 34. gate: a private backlog the job's token cannot read is said so, not mistaken for "no feature"
+new_case strict-hidden
+pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+: > "$fx/backlog-hidden"
+run_strict --pr 3
+check "hidden: a backlog the token cannot read fails the gate" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "hidden: it names the missing token" $(has "cannot read the backlog $BACKLOG" && has 'BACKLOG_READ_TOKEN' && echo 0 || echo 1) "out=$out"
+check "hidden: it does not claim the PR links no feature" $(! has 'links no feature of the backlog' && echo 0 || echo 1) "out=$out"
+check "hidden: it does not call the milestone of the feature \"none\"" $(! has 'its milestone is "none"' && echo 0 || echo 1) "out=$out"
+
+# 35. gate: with BACKLOG_READ_TOKEN the backlog is read with that token, and only the backlog
+new_case strict-token
+pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+: > "$fx/backlog-hidden"
+out="$(PATH="$bin:$PATH" REPO="$REPO" BACKLOG_REPO="$BACKLOG" GH_TOKEN=job-token BACKLOG_READ_TOKEN=backlog-secret FIXTURES="$fx" bash "$script" --pr 3 2>&1)"; rc=$?
+check "token: with BACKLOG_READ_TOKEN the feature is seen and the gate passes" $([ "$rc" -eq 0 ] && has "✓ links $BACKLOG#30 (feature of business milestone" && echo 0 || echo 1) "rc=$rc out=$out"
+check "token: the backlog token is used for calls about the backlog" $(grep -q "GH_TOKEN=backlog-secret gh .*$BACKLOG" "$fx/ghcalls.log" && echo 0 || echo 1) "$(cat "$fx/ghcalls.log")"
+check "token: the backlog token never reaches a call about this repository" $(! grep "GH_TOKEN=backlog-secret" "$fx/ghcalls.log" | grep -v "$BACKLOG" | grep -q . && echo 0 || echo 1) "$(grep backlog-secret "$fx/ghcalls.log")"
+check "token: the job's own token still reads the pull request" $(grep -q "GH_TOKEN=job-token gh pr view" "$fx/ghcalls.log" && echo 0 || echo 1) "$(cat "$fx/ghcalls.log")"
+
+# 36. gate: an unset BACKLOG_READ_TOKEN changes nothing for a readable backlog
+new_case strict-readable
+pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run_strict --pr 3
+check "readable: without BACKLOG_READ_TOKEN a readable backlog is read with the job's token" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
