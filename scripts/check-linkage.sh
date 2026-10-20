@@ -20,7 +20,7 @@ What each entity owes (this script enforces it):
              <backlog>#N" (or a closing link) to an issue whose milestone says "Release: business".
              A bot's PR (a bot author, or a dependabot/ or update/ branch) and the backlog's own
              PRs are exempt. Maintenance with no feature of its own links the standing feature
-             (the issue with the label "standing") of the active business milestone.
+             (the issue with the label "type:standing") of the active business milestone.
   Milestone  one release (vX.Y.Z); tag only when every issue is closed, every PR that
              links one is merged, and no PR is still open.
   Feature    an issue in the backlog repository whose milestone says "Release: business"
@@ -189,7 +189,7 @@ if [ -n "$PR_NUM" ]; then
       if [ -z "$feats" ] && [ -n "$(feature_candidates "$pj")" ] && ! backlog_readable; then
         :   # said above, link by link
       elif [ -z "$feats" ]; then
-        printf '  ✗ links no feature of the backlog — add "Part of %s#<feature>" (maintenance with no feature of its own: the standing feature of the active business milestone, the issue with the label standing)\n' "$BACKLOG_REPO"; e=1
+        printf '  ✗ links no feature of the backlog — add "Part of %s#<feature>" (maintenance with no feature of its own: the standing feature of the active business milestone, the issue with the label type:standing)\n' "$BACKLOG_REPO"; e=1
       else
         shown=" $(printf '%s ' $p_links)"
         for f in $feats; do

@@ -363,7 +363,7 @@ pr_json 3 OPEN "" "Bumps the pins." v0.8.0
 run_strict --pr 3
 check "strict: a PR with no link to a feature fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
 check "strict: it says which link to add" $(has "✗ links no feature of the backlog" && has "Part of $BACKLOG#" && echo 0 || echo 1) "out=$out"
-check "strict: maintenance is pointed at the standing feature by its label, not by a title" $(has 'label standing' && ! has 'Maintenance and tech debt' && echo 0 || echo 1) "out=$out"
+check "strict: maintenance is pointed at the standing feature by its label, not by a title" $(has 'label type:standing' && ! has 'Maintenance and tech debt' && echo 0 || echo 1) "out=$out"
 
 # 27. gate: Part of a feature passes, the PR needs no issue of its own
 new_case strict-feature
