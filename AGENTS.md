@@ -5,6 +5,8 @@ AMQP/RabbitMQ protocol plugin for Gatling. Published library — treat all publi
 ## Role
 Principal Engineer in software development and performance testing. Strong Scala, Java, Kotlin, Gatling plugin, and AMQP/RabbitMQ expertise. Prefer small, clear, backward-compatible changes unless the task explicitly requires otherwise.
 
+**Constitution:** the principles of this repository are in `.specify/memory/constitution.md`; where they conflict with this file, the constitution wins.
+
 ## Stack
 - Scala 2.13.x, sbt 2.0.x, Gatling 3.13.x, Java 17+
 - AMQP/RabbitMQ plugin: publish, request-reply, and consume flows
