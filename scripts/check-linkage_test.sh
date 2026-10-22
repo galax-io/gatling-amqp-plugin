@@ -54,6 +54,7 @@ while [ $# -gt 0 ]; do
     --paginate|--slurp) paginate=1 ;;
     --repo)             shift; repo="${1:-}" ;;
     --json)             shift ;;
+    -H|--header)        shift ;;
     *)                  positional+=("$1") ;;
   esac
   shift
@@ -79,6 +80,14 @@ case "$cmd" in
       "repos/$REPO/issues?milestone=8&state=all&per_page=100")
         [ "$paginate" = 1 ] || unexpected "$all"
         jq -sc '[.]' "$fx/items.ndjson" ;;   # --paginate --slurp: an array of pages
+      "repos/$REPO/pulls/"*"/files?per_page=100")   # the PR's files: files-<N>.json, none without it
+        n="${path#repos/$REPO/pulls/}"; n="${n%%/*}"
+        f="$fx/files-$n.json"; [ -f "$f" ] || f=/dev/null
+        if [ "$f" = /dev/null ]; then :; else reply "$f"; fi ;;
+      "repos/$REPO/contents/"*"?ref="*)            # a file or directory at a ref: tree-<ref>/<path>
+        p="${path#repos/$REPO/contents/}"; ref="${p##*\?ref=}"; p="${p%%\?ref=*}"
+        t="$fx/tree-$ref/$p"
+        if [ -d "$t" ]; then echo '[]'; elif [ -f "$t" ]; then cat "$t"; else not_found; fi ;;
       *) unexpected "$all" ;;
     esac ;;
   pr)
@@ -112,7 +121,7 @@ add_issue() { # number, state (open|closed) — an issue of this repository in v
 pr_json() { # number, state (OPEN|CLOSED|MERGED), closing link owner/repo#N or "", body, milestone title or "", [base branch]
   jq -nc --argjson n "$1" --arg state "$2" --arg link "$3" --arg body "$4" --arg ms "$5" --arg base "${6:-main}" --arg author "${PR_AUTHOR:-jigarkhwar}" --arg bot "${PR_BOT:-0}" --arg head "${PR_HEAD:-feat/x}" '{
     number: $n, title: "PR \($n)", state: $state, body: $body, baseRefName: $base,
-    author: {login: $author, is_bot: ($bot == "1")}, headRefName: $head,
+    author: {login: $author, is_bot: ($bot == "1")}, headRefName: $head, headRefOid: "headsha",
     milestone: (if $ms == "" then null else {title: $ms} end),
     closingIssuesReferences: [$link | select(. != "")
       | capture("^(?<owner>[^/]+)/(?<name>[^#]+)#(?<n>[0-9]+)$")
@@ -367,7 +376,7 @@ check "strict: maintenance is pointed at the standing feature by its label, not 
 
 # 27. gate: Part of a feature passes, the PR needs no issue of its own
 new_case strict-feature
-pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+pr_json 3 OPEN "" "Part of $BACKLOG#30"$'\nRefs: BCKLG-30' v0.8.0
 issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
 run_strict --pr 3
 check "strict: Part of a feature passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
@@ -375,7 +384,7 @@ check "strict: the feature is named" $(has "✓ links $BACKLOG#30 (feature of bu
 
 # 28. gate: a closing link to an issue of this repository plus Part of a feature: the feature is seen
 new_case strict-closes-and-part
-pr_json 3 OPEN "$REPO#1" $'Closes #1\nPart of '"$BACKLOG"'#30' v0.8.0
+pr_json 3 OPEN "$REPO#1" $'Closes #1\nPart of '"$BACKLOG"$'#30\nRefs: BCKLG-30' v0.8.0
 issue_in "$REPO" 1 v0.8.0
 issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
 run_strict --pr 3
@@ -441,7 +450,7 @@ check "hidden: it does not call the milestone of the feature \"none\"" $(! has '
 
 # 35. gate: with BACKLOG_READ_TOKEN the backlog is read with that token, and only the backlog
 new_case strict-token
-pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+pr_json 3 OPEN "" "Part of $BACKLOG#30"$'\nRefs: BCKLG-30' v0.8.0
 issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
 : > "$fx/backlog-hidden"
 out="$(PATH="$bin:$PATH" REPO="$REPO" BACKLOG_REPO="$BACKLOG" GH_TOKEN=job-token BACKLOG_READ_TOKEN=backlog-secret FIXTURES="$fx" bash "$script" --pr 3 2>&1)"; rc=$?
@@ -452,10 +461,112 @@ check "token: the job's own token still reads the pull request" $(grep -q "GH_TO
 
 # 36. gate: an unset BACKLOG_READ_TOKEN changes nothing for a readable backlog
 new_case strict-readable
-pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+pr_json 3 OPEN "" "Part of $BACKLOG#30"$'\nRefs: BCKLG-30' v0.8.0
 issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
 run_strict --pr 3
 check "readable: without BACKLOG_READ_TOKEN a readable backlog is read with the job's token" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+
+# ---- the task number (backlog#403) ------------------------------------------------
+pr_files() { # number, then "status path" pairs — the files of the PR as GitHub lists them
+  local n="$1"; shift
+  local rows=() s p
+  while [ $# -gt 0 ]; do s="$1"; p="$2"; shift 2; rows+=("$(jq -nc --arg s "$s" --arg p "$p" '{status: $s, filename: $p}')"); done
+  printf '%s\n' "${rows[@]}" | jq -sc '.' > "$fx/files-$n.json"
+}
+at() { # ref, path, [text] — a file of the repository at a ref (a directory when no text is given)
+  mkdir -p "$fx/tree-$1/$(dirname "$2")"
+  if [ $# -ge 3 ]; then printf '%s\n' "$3" > "$fx/tree-$1/$2"; else mkdir -p "$fx/tree-$1/$2"; fi
+}
+
+# 37. gate: a PR of a feature names its task number, BCKLG-<N>, as a whole word
+new_case task-missing
+pr_json 3 OPEN "" "Part of $BACKLOG#30"$'\nRefs: BCKLG-300' v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run_strict --pr 3
+check "task: a PR of feature #30 without BCKLG-30 fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "task: it says which line to add" $(has '✗ names no task number BCKLG-30 — add the line "Refs: BCKLG-30" to its body' && echo 0 || echo 1) "out=$out"
+check "task: the script made only the calls the stub knows" $(only_known_calls && echo 0 || echo 1) "$(cat "$fx/unexpected.log" 2>&1)"
+new_case task-named
+pr_json 3 OPEN "" "Part of $BACKLOG#30"$'\n\nRefs: BCKLG-30' v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run_strict --pr 3
+check "task: with Refs: BCKLG-30 it passes" $([ "$rc" -eq 0 ] && has '✓ names its task: BCKLG-30' && echo 0 || echo 1) "rc=$rc out=$out"
+new_case task-optional
+pr_json 3 OPEN "" "Part of $BACKLOG#30" v0.8.0
+issue_in "$BACKLOG" 30 'M1 — first run' "$BUSINESS"
+run --pr 3
+check "task: a repository not yet on the feature rule is not asked for the number" $([ "$rc" -eq 0 ] && ! has 'task number' && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 38. gate: a spec directory the PR adds is named by the task number; one from before keeps its name
+new_case spec-new-misnamed
+pr_json 3 OPEN "" "Bumps the pins." v0.8.0
+pr_files 3 added specs/025-health/spec.md modified README.md
+run --pr 3
+check "spec: a new spec directory not named BCKLG-<N>-<name> fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "spec: it names the directory and the form" $(has '✗ adds specs/025-health/: a new spec directory is specs/BCKLG-<N>-<name>, N the number of its task' && echo 0 || echo 1) "out=$out"
+check "spec: the script made only the calls the stub knows" $(only_known_calls && echo 0 || echo 1) "$(cat "$fx/unexpected.log" 2>&1)"
+new_case spec-legacy
+pr_json 3 OPEN "" "Bumps the pins." v0.8.0
+pr_files 3 modified specs/017-gate-debate/spec.md added specs/017-gate-debate/notes.md
+at main specs/017-gate-debate
+run --pr 3
+check "spec: a spec directory from before the task number keeps its name" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 39. gate: spec, plan and tasks of a BCKLG directory name its task on the «Задачи» line
+new_case spec-lines
+pr_json 3 OPEN "" "Bumps the pins." v0.8.0
+pr_files 3 added specs/BCKLG-30-health/spec.md added specs/BCKLG-30-health/plan.md added specs/BCKLG-30-health/tasks.md added specs/BCKLG-30-health/checklists/requirements.md removed specs/BCKLG-30-health/old.md
+at headsha specs/BCKLG-30-health/spec.md $'# Health\n\n**Задачи**: BCKLG-7, BCKLG-30\n'
+at headsha specs/BCKLG-30-health/plan.md $'# Plan\n\n**Задачи**: BCKLG-7\n'
+at headsha specs/BCKLG-30-health/tasks.md $'# Tasks\n'
+pr_files 3 added specs/BCKLG-30-health/spec.md added specs/BCKLG-30-health/plan.md added specs/BCKLG-30-health/tasks.md added specs/BCKLG-30-health/checklists/requirements.md removed specs/BCKLG-30-health/old.md added specs/BCKLG-31-english/spec.md
+at headsha specs/BCKLG-31-english/spec.md $'# English\n\n**Tasks**: BCKLG-31\n'
+run --pr 3
+check "spec: a plan or tasks without the directory's task fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "spec: a line that names another task is said so" $(has '✗ specs/BCKLG-30-health/plan.md: its «Задачи» line names no BCKLG-30, the task of its directory' && echo 0 || echo 1) "out=$out"
+check "spec: a file without the line is said so" $(has '✗ specs/BCKLG-30-health/tasks.md has no line «**Задачи**: BCKLG-30» (in English «**Tasks**: BCKLG-30») under its title' && echo 0 || echo 1) "out=$out"
+check "spec: the spec that names it passes" $(! has 'spec.md' && echo 0 || echo 1) "out=$out"
+check "spec: the English spelling **Tasks**: names it too (backlog#403)" $(! has 'BCKLG-31-english' && echo 0 || echo 1) "out=$out"
+check "spec: the script made only the calls the stub knows" $(only_known_calls && echo 0 || echo 1) "$(cat "$fx/unexpected.log" 2>&1)"
+new_case spec-bot
+PR_AUTHOR='dependabot[bot]' PR_BOT=1 pr_json 3 OPEN "" "Bumps a library." v0.8.0
+pr_files 3 added specs/025-health/spec.md
+run --pr 3
+check "spec: a bot's PR is not looked at" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+
+# 40. --specs: every spec of a checkout, with no call to GitHub
+specs_of() { # name — a tree of specs for --specs, under $fx/<name>/specs
+  root="$fx/$1/specs"; mkdir -p "$root"
+}
+spec_file() { # dir, file, text
+  mkdir -p "$root/$1"; printf '%s\n' "$3" > "$root/$1/$2"
+}
+run_specs() { out="$(cd "$(dirname "$root")" && PATH="$bin:$PATH" FIXTURES="$fx" bash "$script" --specs 2>&1)"; rc=$?; }   # the default, specs/
+new_case specs-clean
+specs_of clean
+spec_file BCKLG-62-review-debate spec.md $'# Debate\n\n**Задачи**: BCKLG-62, BCKLG-335'
+spec_file BCKLG-62-review-debate plan.md $'# Plan\n\n**Задачи**: BCKLG-62, BCKLG-335'
+spec_file BCKLG-334-gate-review-cost spec.md $'# Cost\n\n**Задачи**: BCKLG-334'
+spec_file BCKLG-7-english spec.md $'# English\n\n**Tasks**: BCKLG-7'
+spec_file BCKLG-7-english tasks.md $'# Tasks\n\n**Tasks**: BCKLG-7, BCKLG-9'
+printf 'index\n' > "$root/README.md"
+run_specs
+check "specs: the English spelling **Tasks**: reads as the line (backlog#403)" $([ "$rc" -eq 0 ] && ! has 'BCKLG-7-english' && echo 0 || echo 1) "rc=$rc out=$out"
+check "specs: a tree named by task numbers passes" $([ "$rc" -eq 0 ] && has 'PASS' && echo 0 || echo 1) "rc=$rc out=$out"
+check "specs: it asks GitHub nothing" $([ ! -s "$fx/ghcalls.log" ] && echo 0 || echo 1) "$(cat "$fx/ghcalls.log" 2>&1)"
+new_case specs-broken
+specs_of broken
+spec_file 62-review-debate spec.md $'# Debate\n\n**Задачи**: BCKLG-62'
+spec_file BCKLG-334-gate-review-cost spec.md $'# Cost\n\n**Задачи**: BCKLG-334, BCKLG-62'
+spec_file BCKLG-334-gate-review-cost tasks.md $'# Tasks'
+spec_file BCKLG-62-again spec.md $'# Again\n\n**Задачи**: BCKLG-62'
+spec_file BCKLG-9-draft notes.md 'no spec yet'
+run_specs
+check "specs: a broken tree fails" $([ "$rc" -eq 1 ] && has 'FAIL' && echo 0 || echo 1) "rc=$rc out=$out"
+check "specs: a directory not named by its task" $(has '✗ specs/62-review-debate is not named BCKLG-<N>-<name>' && echo 0 || echo 1) "out=$out"
+check "specs: a file without the line" $(has '✗ specs/BCKLG-334-gate-review-cost/tasks.md has no line «**Задачи**: BCKLG-334» (in English «**Tasks**: BCKLG-334») under its title' && echo 0 || echo 1) "out=$out"
+check "specs: a directory without spec.md" $(has '✗ specs/BCKLG-9-draft has no spec.md' && echo 0 || echo 1) "out=$out"
+check "specs: a task two specs carry" $(has '✗ BCKLG-62 is carried by 2 specs: specs/BCKLG-334-gate-review-cost specs/BCKLG-62-again — a task may have one' && echo 0 || echo 1) "out=$out"
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

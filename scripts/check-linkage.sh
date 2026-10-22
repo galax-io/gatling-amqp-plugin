@@ -21,6 +21,11 @@ What each entity owes (this script enforces it):
              A bot's PR (a bot author, or a dependabot/ or update/ branch) and the backlog's own
              PRs are exempt. Maintenance with no feature of its own links the standing feature
              (the issue with the label "type:standing") of the active business milestone.
+  Task       a PR of a feature names its task number, BCKLG-<N> for issue N of the backlog,
+             in its body ("Refs: BCKLG-<N>"). A spec directory a PR adds is
+             specs/BCKLG-<N>-<name>, and the spec.md, plan.md and tasks.md of one carry the
+             line "**Задачи**: BCKLG-<N>[, …]" with its number ("**Tasks**:" in a repository
+             whose files are English only). Bots' PRs are exempt.
   Milestone  one release (vX.Y.Z); tag only when every issue is closed, every PR that
              links one is merged, and no PR is still open.
   Feature    an issue in the backlog repository whose milestone says "Release: business"
@@ -33,6 +38,8 @@ Usage:
   scripts/check-linkage.sh --for-tag vX.Y.Z  # GATE a release: tag-readiness of that version's milestone
   scripts/check-linkage.sh [milestone]       # audit a milestone (default: lowest-numbered open)
   scripts/check-linkage.sh --tag [ms]        # also assert tag-readiness (issues closed, linked PRs merged, none open)
+  scripts/check-linkage.sh --specs [dir]     # every spec of a checkout (default specs/): named by its task,
+                                             # its «Задачи» lines naming it, no task in two specs; no GitHub
   scripts/check-linkage.sh --help
 
 Env:
@@ -48,6 +55,53 @@ Env:
 Exit: 0 all rules hold | 1 at least one violation | 2 usage/prereq error.
 EOF
 }
+
+# The task number (backlog#403): BCKLG-<N> for issue N of the backlog, the one number of a task in the
+# organization. A spec names the tasks it carries on its «Задачи» line, under its title; a repository whose
+# files are English only writes it «**Tasks**:», read alike.
+TASK_RE='^BCKLG-([1-9][0-9]*)-[A-Za-z0-9]'
+tasks_of() { # text on stdin -> the numbers on its first «Задачи» (or «Tasks») line, one per line; fails without the line
+  local line
+  line=$(grep -m1 -E '^[[:space:]]*\*\*(Задачи|Tasks)\*\*:') || return 1
+  tr -c 'A-Za-z0-9_-' '\n' <<<"$line" | sed -n 's/^BCKLG-\([1-9][0-9]*\)$/\1/p'
+}
+names_task() { # text on stdin, number -> succeeds when the text names BCKLG-<number> as a whole word
+  tr -c 'A-Za-z0-9_-' '\n' | grep -qx "BCKLG-$1"
+}
+line_problem() { # file path, number, its text on stdin -> what is wrong with its «Задачи» line; nothing when it names the number
+  local nums
+  if ! nums=$(tasks_of); then printf '%s has no line «**Задачи**: BCKLG-%s» (in English «**Tasks**: BCKLG-%s») under its title' "$1" "$2" "$2"
+  elif ! grep -qx "$2" <<<"$nums"; then printf '%s: its «Задачи» line names no BCKLG-%s, the task of its directory' "$1" "$2"; fi
+}
+
+# Every spec of a checkout: its directory named by its task, the «Задачи» line of its spec, plan and tasks naming it,
+# no task carried by two specs. Files only: no GitHub, so the backlog's CI runs it on every PR.
+check_specs() { # dir
+  local root="${1%/}" e=0 d name n f problem nums carried="" dup
+  [ -d "$root" ] || { echo "error: no directory $root" >&2; return 2; }
+  printf 'Specs: %s\n' "$root"
+  for d in "$root"/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if ! [[ "$name" =~ $TASK_RE ]]; then printf '  ✗ %s/%s is not named BCKLG-<N>-<name>, N the number of its task\n' "$root" "$name"; e=1; continue; fi
+    n="${BASH_REMATCH[1]}"
+    [ -f "$d/spec.md" ] || { printf '  ✗ %s/%s has no spec.md\n' "$root" "$name"; e=1; }
+    for f in spec.md plan.md tasks.md; do
+      [ -f "$d/$f" ] || continue
+      problem=$(line_problem "$root/$name/$f" "$n" < "$d/$f")
+      if [ -n "$problem" ]; then printf '  ✗ %s\n' "$problem"; e=1
+      elif [ "$f" = spec.md ]; then nums=$(tasks_of < "$d/$f"); carried+=$(sed "s|\$| $root/$name|" <<<"$nums")$'\n'; fi
+    done
+  done
+  dup=$(awk 'NF { c[$1]++; d[$1] = d[$1] " " $2 } END { for (k in c) if (c[k] > 1) printf "BCKLG-%s is carried by %d specs:%s\n", k, c[k], d[k] }' <<<"$carried" | sort)
+  if [ -n "$dup" ]; then sed 's/^/  ✗ /; s/$/ — a task may have one/' <<<"$dup"; e=1; fi
+  if [ "$e" = 0 ]; then printf 'PASS: every spec is named by its task.\n'; return 0; fi
+  printf 'FAIL: fix the above.\n'; return 1
+}
+if [ "${1:-}" = --specs ]; then
+  [ $# -le 2 ] || { echo "error: --specs takes one directory" >&2; exit 2; }
+  check_specs "${2:-specs}"; exit $?
+fi
 
 for bin in gh jq; do
   command -v "$bin" >/dev/null 2>&1 || { echo "error: '$bin' not found on PATH" >&2; exit 2; }
@@ -146,7 +200,7 @@ CLOSES='(^|[^[:alnum:]_])(close[sd]?|fix(e[sd])?|resolve[sd]?):? +'
 # names no issue (a pull request, say) and is not a link (the lenient text
 # fallback is audit-mode only).
 if [ -n "$PR_NUM" ]; then
-  pj=$(gh pr view "$PR_NUM" --repo "$REPO" --json number,title,state,milestone,closingIssuesReferences,body,baseRefName,author,headRefName) \
+  pj=$(gh pr view "$PR_NUM" --repo "$REPO" --json number,title,state,milestone,closingIssuesReferences,body,baseRefName,author,headRefName,headRefOid) \
     || { echo "error: PR #$PR_NUM not found in $REPO" >&2; exit 2; }
   p_title=$(jq -r '.title' <<<"$pj")
   p_ms=$(jq -r '.milestone.title // ""' <<<"$pj")
@@ -195,8 +249,36 @@ if [ -n "$PR_NUM" ]; then
         for f in $feats; do
           case "$shown" in *" $f "*) ;; *) printf '  ✓ links %s (feature of business milestone "%s")\n' "$f" "$(feature_ms "$f")" ;; esac
         done
+        # The feature's task number, which a search across the organization finds (backlog#403).
+        for f in $feats; do
+          if jq -r '.body // ""' <<<"$pj" | names_task "${f##*#}"; then printf '  ✓ names its task: BCKLG-%s\n' "${f##*#}"
+          else printf '  ✗ names no task number BCKLG-%s — add the line "Refs: BCKLG-%s" to its body\n' "${f##*#}" "${f##*#}"; e=1; fi
+        done
       fi
     fi
+  fi
+  # The spec directories the PR touches (backlog#403): a new one is named by its task, and its spec, plan
+  # and tasks name it on the «Задачи» line. A directory from before the task number keeps its name.
+  if ! is_bot_pr "$pj"; then
+    p_files=$(gh api --paginate "repos/$REPO/pulls/$PR_NUM/files?per_page=100" --jq '.[] | "\(.status)\t\(.filename)"') \
+      || { echo "error: cannot list the files of PR #$PR_NUM" >&2; exit 2; }
+    p_head=$(jq -r '.headRefOid // ""' <<<"$pj")
+    p_base=$(jq -r '.baseRefName' <<<"$pj")
+    for d in $(awk -F'\t' '$2 ~ /^specs\/[^\/]+\// { split($2, a, "/"); print a[2] }' <<<"$p_files" | sort -u); do
+      if [[ "$d" =~ $TASK_RE ]]; then
+        n="${BASH_REMATCH[1]}"
+        while IFS=$'\t' read -r st f; do
+          case "$f" in "specs/$d/spec.md"|"specs/$d/plan.md"|"specs/$d/tasks.md") ;; *) continue ;; esac
+          [ "$st" != removed ] || continue
+          text=$(gh api "repos/$REPO/contents/$f?ref=$p_head" -H 'Accept: application/vnd.github.raw') \
+            || { printf '  ✗ cannot read %s at the head of the PR\n' "$f"; e=1; continue; }
+          problem=$(line_problem "$f" "$n" <<<"$text")
+          if [ -n "$problem" ]; then printf '  ✗ %s\n' "$problem"; e=1; fi
+        done <<<"$p_files"
+      elif ! gh api "repos/$REPO/contents/specs/$d?ref=$p_base" --silent >/dev/null 2>&1; then
+        printf '  ✗ adds specs/%s/: a new spec directory is specs/BCKLG-<N>-<name>, N the number of its task\n' "$d"; e=1
+      fi
+    done
   fi
   if [ "$e" = 0 ]; then printf 'PASS: PR #%s is well-formed.\n' "$PR_NUM"; exit 0; fi
   printf 'FAIL: PR #%s is malformed — fix the above before merge.\n' "$PR_NUM"; exit 1
