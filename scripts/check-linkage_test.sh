@@ -372,7 +372,34 @@ pr_json 3 OPEN "" "Bumps the pins." v0.8.0
 run_strict --pr 3
 check "strict: a PR with no link to a feature fails" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
 check "strict: it says which link to add" $(has "✗ links no feature of the backlog" && has "Part of $BACKLOG#" && echo 0 || echo 1) "out=$out"
-check "strict: maintenance is pointed at the standing feature by its label, not by a title" $(has 'label type:standing' && ! has 'Maintenance and tech debt' && echo 0 || echo 1) "out=$out"
+check "strict: it offers the agreed way out, a No feature line" $(has 'No feature:' && ! has 'standing' && echo 0 || echo 1) "out=$out"
+
+# 26b. gate: a technical PR agreed with the maintainer skips the feature with a "No feature:" line
+new_case strict-no-feature
+pr_json 3 OPEN "" "Bumps the pins."$'\nNo feature: technical, agreed with the maintainer on 2026-10-27' v0.8.0
+run_strict --pr 3
+check "strict: a No feature line with a reason passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: the log names the agreement" $(has '✓ no feature of the backlog, by agreement: technical, agreed with the maintainer on 2026-10-27' && echo 0 || echo 1) "out=$out"
+new_case strict-no-feature-indented
+pr_json 3 OPEN "" "Bumps the pins."$'\n  no feature:   technical, agreed with the maintainer\r' v0.8.0
+run_strict --pr 3
+check "strict: the line may be indented, in any case, with trailing spaces and a CR" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-no-feature-empty
+pr_json 3 OPEN "" "Bumps the pins."$'\nNo feature:' v0.8.0
+run_strict --pr 3
+check "strict: a No feature line without a reason fails" $([ "$rc" -eq 1 ] && has '✗ links no feature of the backlog' && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-no-feature-short
+pr_json 3 OPEN "" "Bumps the pins."$'\nNo feature: ok' v0.8.0
+run_strict --pr 3
+check "strict: a reason of a word or two is no reason" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-no-feature-prose
+pr_json 3 OPEN "" "It has No feature: of its own, as the maintainer agreed in chat today."$'\nBumps the pins.' v0.8.0
+run_strict --pr 3
+check "strict: the words inside a sentence are not the line" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-no-feature-no-milestone
+pr_json 3 OPEN "" "Bumps the pins."$'\nNo feature: technical, agreed with the maintainer' ""
+run_strict --pr 3
+check "strict: the agreement does not excuse the missing milestone" $([ "$rc" -eq 1 ] && has '✗ no milestone' && echo 0 || echo 1) "rc=$rc out=$out"
 
 # 27. gate: Part of a feature passes, the PR needs no issue of its own
 new_case strict-feature
