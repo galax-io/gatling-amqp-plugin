@@ -68,18 +68,22 @@ case "$cmd" in
     case "$path" in
       "repos/$REPO/milestones?state=open&per_page=100")
         echo '[{"number":8,"title":"v0.8.0"}]' | jq -r "${expr:-.}" ;;
-      "repos/$REPO/milestones?state=all&per_page=100")
-        echo '[{"number":7,"title":"v0.7.0"},{"number":8,"title":"v0.8.0"}]' ;;
+      "repos/$REPO/milestones?state=all&per_page=100")   # milestones.json when a case sets its own
+        if [ -f "$fx/milestones.json" ]; then cat "$fx/milestones.json"
+        else echo '[{"number":7,"title":"v0.7.0"},{"number":8,"title":"v0.8.0"}]'; fi ;;
       "repos/$REPO")
         echo '{"default_branch":"main"}' | jq -r "${expr:-.}" ;;
       "repos/$BACKLOG_REPO")
         backlog_denied && not_found
         echo '{"private":true}' ;;
-      "repos/$REPO/milestones/8")
-        echo '{"title":"v0.8.0","state":"open"}' ;;
-      "repos/$REPO/issues?milestone=8&state=all&per_page=100")
+      "repos/$REPO/milestones/"[0-9]*)
+        if [ -f "$fx/milestones.json" ]; then jq -c --argjson n "${path##*/}" '.[] | select(.number == $n) | {title, state: "open"}' "$fx/milestones.json"
+        else echo '{"title":"v0.8.0","state":"open"}'; fi ;;
+      "repos/$REPO/issues?milestone="[0-9]*"&state=all&per_page=100")
         [ "$paginate" = 1 ] || unexpected "$all"
-        jq -sc '[.]' "$fx/items.ndjson" ;;   # --paginate --slurp: an array of pages
+        n="${path#*milestone=}"; n="${n%%&*}"      # items-<N>.ndjson for a milestone of its own
+        f="$fx/items-$n.ndjson"; [ -f "$f" ] || f="$fx/items.ndjson"
+        jq -sc '[.]' "$f" ;;   # --paginate --slurp: an array of pages
       "repos/$REPO/pulls/"*"/files?per_page=100")   # the PR's files: files-<N>.json, none without it
         n="${path#repos/$REPO/pulls/}"; n="${n%%/*}"
         f="$fx/files-$n.json"; [ -f "$f" ] || f=/dev/null
@@ -133,6 +137,9 @@ add_pr() { # number, state, closing link or "", [body] — a PR in v0.8.0
   [ "$2" = OPEN ] && rest=open
   printf '{"number":%s,"state":"%s","pull_request":{}}\n' "$1" "$rest" >> "$fx/items.ndjson"
   pr_json "$1" "$2" "$3" "${4:-}" v0.8.0
+}
+milestones_are() { # number:title ... — the milestones of this case, in place of v0.7.0 and v0.8.0
+  printf '%s\n' "$@" | jq -R 'split(":") | {number: (.[0] | tonumber), title: (.[1:] | join(":"))}' | jq -sc . > "$fx/milestones.json"
 }
 run() { # the script's arguments; sets $out and $rc. The cases above 26 test the other rules, so the
         # requirement of a feature link is off for them; cases 26 and up use run_strict.
@@ -189,6 +196,45 @@ check "for-tag: merged and closed technical PRs do not block the tag" $([ "$rc" 
 check "for-tag: the patch maps to its minor's milestone" $(has 'Milestone: #8  v0.8.0' && echo 0 || echo 1) "out=$out"
 check "for-tag: the milestone is tag-ready" $(has 'Milestone #8 is tag-ready.' && echo 0 || echo 1) "out=$out"
 check "for-tag: the script made only the calls the stub knows" $(only_known_calls && echo 0 || echo 1) "$(cat "$fx/unexpected.log" 2>&1)"
+
+# 4b. for-tag: a patch tag is checked against the milestone of its own version when one exists, and only
+#     otherwise against its minor's — the minor's open issue must not hold back a patch
+new_case tag-own-milestone
+milestones_are '8:v0.8.0' '9:v0.8.1 — patch'
+printf '{"number":1,"state":"open"}\n' > "$fx/items-8.ndjson"   # v0.8.0 still holds an open issue
+issue_in "$REPO" 1 v0.8.0
+add_pr 2 MERGED ""
+run --for-tag v0.8.1
+check "for-tag: the milestone of the patch's own version is the one checked" $(has 'Milestone: #9  v0.8.1 — patch' && echo 0 || echo 1) "out=$out"
+check "for-tag: the minor's open issue does not block the patch" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "for-tag: the script made only the calls the stub knows" $(only_known_calls && echo 0 || echo 1) "$(cat "$fx/unexpected.log" 2>&1)"
+
+new_case tag-own-milestone-exact
+milestones_are '8:v0.8.0' '9:v0.8.2'
+add_pr 2 MERGED ""
+run --for-tag v0.8.2
+check "for-tag: a milestone titled just the version is the patch's own" $(has 'Milestone: #9  v0.8.2' && echo 0 || echo 1) "out=$out"
+
+new_case tag-own-milestone-longer
+milestones_are '8:v0.8.0' '9:v0.8.20'
+add_pr 2 MERGED ""
+run --for-tag v0.8.2
+check "for-tag: v0.8.20 is not the milestone of v0.8.2; the minor's is" $(has 'Milestone: #8  v0.8.0' && echo 0 || echo 1) "out=$out"
+
+new_case tag-without-v
+milestones_are '5:2.2.0' '6:2.2.2'
+add_pr 2 MERGED ""
+run --for-tag 2.2.2
+check "for-tag: a tag without v finds the milestone of its version" $(has 'Milestone: #6  2.2.2' && echo 0 || echo 1) "out=$out"
+check "for-tag: and passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+run --for-tag 2.2.3
+check "for-tag: a tag without v falls back to the minor's milestone, named without v too" $(has 'Milestone: #5  2.2.0' && echo 0 || echo 1) "out=$out"
+
+new_case tag-no-milestone
+milestones_are '8:v0.8.0'
+run --for-tag v0.9.1
+check "for-tag: no milestone of the version or its minor is an error" $([ "$rc" -eq 2 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "for-tag: it names both titles it looked for" $(has "no milestone 'v0.9.1' or 'v0.9.0…'" && echo 0 || echo 1) "out=$out"
 
 # 5. tag: a PR that links an issue must be merged, not just closed
 new_case tag-closed-linked
