@@ -488,6 +488,23 @@ PR_HEAD='feat/not-a-bot' pr_json 3 OPEN "" "Update the docs" v0.8.0
 run_strict --pr 3
 check "strict: a human's branch is not exempt" $([ "$rc" -eq 1 ] && echo 0 || echo 1) "rc=$rc out=$out"
 
+# 30a. gate: a bot's PR gets its milestone when the conveyor merges it (BCKLG-831): the gate runs when the PR
+#      opens, before any milestone, and a milestone set with the job token starts no workflow to check it again
+new_case strict-bot-no-milestone
+PR_AUTHOR='dependabot[bot]' PR_BOT=1 pr_json 3 OPEN "" "Bumps a library." ""
+run_strict --pr 3
+check "strict: a bot's PR without a milestone passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+check "strict: it says who gives the milestone" $(has '- no milestone yet: the dependency conveyor gives a bot'"'"'s PR the active milestone when it merges it' && ! has '✗ no milestone' && echo 0 || echo 1) "out=$out"
+new_case strict-steward-no-milestone
+PR_HEAD='update/scalafmt-core-3.9.0' pr_json 3 OPEN "" "Update scalafmt-core to 3.9.0" ""
+run_strict --pr 3
+check "strict: a Scala Steward branch without a milestone passes" $([ "$rc" -eq 0 ] && echo 0 || echo 1) "rc=$rc out=$out"
+new_case strict-human-no-milestone
+PR_HEAD='feat/not-a-bot' pr_json 3 OPEN "" "Part of $BACKLOG#31" ""
+issue_in "$BACKLOG" 31 'M1 — first run' 'Release: business'
+run_strict --pr 3
+check "strict: a person's PR without a milestone still fails" $([ "$rc" -eq 1 ] && has '✗ no milestone' && echo 0 || echo 1) "rc=$rc out=$out"
+
 # 31. gate: the backlog's own PRs link nothing above them
 new_case strict-backlog-itself
 pr_json 3 OPEN "" "Adds a script." v0.8.0
