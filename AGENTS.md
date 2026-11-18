@@ -15,6 +15,11 @@ Principal Engineer in software development and performance testing. Strong Scala
 
 ## Commands
 
+```bash
+# install   sbt update Test/compile scalafmtCheckAll scalafmtSbtCheck mimaReportBinaryIssues coverage update coverageOff
+# test      sbt test
+```
+
 Format:
 ```
 sbt scalafmtAll scalafmtSbt
